@@ -9,6 +9,7 @@ function OnboardingContent() {
   const variant = action === "reset_password" ? "reset_password" : "signup";
   return <OnboardingForm variant={variant} />;
 }
+}
 
 export default function Onboarding() {
   return (
