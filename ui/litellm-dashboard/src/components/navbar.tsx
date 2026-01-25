@@ -136,6 +136,9 @@ const Navbar: React.FC<NavbarProps> = ({
                 unCheckedChildren={<SunOutlined />}
               />
             )}
+            {!isPublicPage && (
+              <UserDropdown onLogout={handleLogout} />
+            )}
             <Button type="text" href="https://docs.litellm.ai/docs/" target="_blank" rel="noopener noreferrer">
               Docs
             </Button>
