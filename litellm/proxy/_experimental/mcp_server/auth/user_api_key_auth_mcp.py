@@ -19,7 +19,7 @@ from litellm.proxy.auth.user_api_key_auth import user_api_key_auth
 class MCPRequestHandler:
     """
     Class to handle MCP request processing, including:
-    1. Authentication via LiteLLM API keys
+    1. Authentication via Animal Gateway API keys
     2. MCP server configuration and routing
     3. Header extraction and validation
 

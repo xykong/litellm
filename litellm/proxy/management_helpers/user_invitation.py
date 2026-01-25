@@ -11,7 +11,7 @@ async def create_invitation_for_user(
     user_api_key_dict: UserAPIKeyAuth,
 ):
     """
-    Create an invitation for the user to onboard to LiteLLM Admin UI.
+    Create an invitation for the user to onboard to Animal Gateway Admin UI.
     """
     from litellm.proxy.proxy_server import litellm_proxy_admin_name, prisma_client
 

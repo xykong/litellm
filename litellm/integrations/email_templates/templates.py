@@ -66,7 +66,7 @@ SOFT_BUDGET_ALERT_EMAIL_TEMPLATE = """
 
                     <p> Hi {recipient_email}, <br/>
 
-                    Your LiteLLM API key has crossed its <b>soft budget limit of {soft_budget}</b>. <br /> <br />
+                    Your Animal Gateway API key has crossed its <b>soft budget limit of {soft_budget}</b>. <br /> <br />
 
                     <b>Current Spend:</b> {spend} <br />
                     <b>Soft Budget:</b> {soft_budget} <br />
@@ -114,7 +114,7 @@ MAX_BUDGET_ALERT_EMAIL_TEMPLATE = """
 
                     <p> Hi {recipient_email}, <br/>
 
-                    Your LiteLLM API key has reached <b>{percentage}% of its maximum budget</b>. <br /> <br />
+                    Your Animal Gateway API key has reached <b>{percentage}% of its maximum budget</b>. <br /> <br />
 
                     <b>Current Spend:</b> {spend} <br />
                     <b>Maximum Budget:</b> {max_budget} <br />

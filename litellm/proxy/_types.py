@@ -2267,7 +2267,7 @@ class PassThroughGenericEndpoint(LiteLLMPydanticObjectBase):
     )
     auth: bool = Field(
         default=True,
-        description="Whether authentication is required for the pass-through endpoint. Defaults to True so a pass-through silently created without an explicit value still requires a valid LiteLLM API key — set to False only if the endpoint is meant to be a public forwarder (e.g. an unauthenticated webhook target).",
+        description="Whether authentication is required for the pass-through endpoint. Defaults to True so a pass-through silently created without an explicit value still requires a valid Animal Gateway API key — set to False only if the endpoint is meant to be a public forwarder (e.g. an unauthenticated webhook target).",
     )
     guardrails: Optional[PassThroughGuardrailsConfig] = Field(
         default=None,
@@ -2751,7 +2751,7 @@ class UserAPIKeyAuth(
         Helper to ensure all logged keys are hashed
         Covers:
         1. Regular API keys from LiteLLM DB
-        2. JWT tokens used for connecting to LiteLLM API
+        2. JWT tokens used for connecting to Animal Gateway API
         """
         normalized = api_key
         if normalized[:7].lower() == "bearer ":

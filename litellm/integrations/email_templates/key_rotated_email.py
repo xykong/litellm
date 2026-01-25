@@ -164,7 +164,7 @@ KEY_ROTATED_EMAIL_TEMPLATE = """
             </div>
             
             <div class="message">
-                <p><strong>Your LiteLLM API key has been rotated</strong> as part of our ongoing commitment to security best practices.</p>
+                <p><strong>Your Animal Gateway API key has been rotated</strong> as part of our ongoing commitment to security best practices.</p>
                 <p style="margin-top: 16px;">Your previous API key has been deactivated and will no longer work. Please update your applications with the new key below.</p>
             </div>
             

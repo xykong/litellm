@@ -356,7 +356,7 @@ async def new_user(
 ):
     """
     Use this to create a new INTERNAL user with a budget.
-    Internal Users can access LiteLLM Admin UI to make keys, request access to models.
+    Internal Users can access Animal Gateway Admin UI to make keys, request access to models.
     This creates a new user and generates a new api key for the new user. The new api key is returned.
 
     Returns user id, budget + new key.

@@ -28,7 +28,7 @@ def build_ui_login_form(show_deprecation_banner: bool = False) -> str:
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>LiteLLM Login</title>
+    <title>Animal Gateway Login</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         body {{
@@ -227,11 +227,11 @@ def build_ui_login_form(show_deprecation_banner: bool = False) -> str:
         {banner_html}
         <div class="logo-container">
             <div class="logo">
-                🚅 LiteLLM
+                🦁 Animal Gateway
             </div>
         </div>
         <h2>Login</h2>
-        <p class="subtitle">Access your LiteLLM Admin UI.</p>
+        <p class="subtitle">Access your Animal Gateway Admin UI.</p>
         <div class="info-box">
             <div class="info-header">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -241,7 +241,7 @@ def build_ui_login_form(show_deprecation_banner: bool = False) -> str:
                 </svg>
                 Default Credentials
             </div>
-            <p>By default, Username is <code>admin</code> and Password is your set LiteLLM Proxy <code>MASTER_KEY</code>.</p>
+            <p>By default, Username is <code>admin</code> and Password is your set Animal Gateway <code>MASTER_KEY</code>.</p>
             <p>Need to set UI credentials or SSO? <a href="https://docs.litellm.ai/docs/proxy/ui" target="_blank">Check the documentation</a>.</p>
         </div>
         <label for="username">Username<span class="required">*</span></label>

@@ -191,7 +191,7 @@ def generate_feedback_box():
     print("\033[1;37m" + "#" + " " * box_width + "#\033[0m")  # noqa
     print("\033[1;37m" + "#" + "-" * box_width + "#\033[0m")  # noqa
     print()  # noqa
-    print(" Thank you for using LiteLLM! - Krrish & Ishaan")  # noqa
+    print(" Thank you for using Animal Gateway!")  # noqa
     print()  # noqa
     print()  # noqa
     print()  # noqa
@@ -624,7 +624,7 @@ else:
 ui_link = f"{server_root_path}/ui"
 fallback_login_link = f"{server_root_path}/fallback/login"
 model_hub_link = f"{server_root_path}/ui/model_hub_table"
-ui_message = f"👉 [```LiteLLM Admin Panel on /ui```]({ui_link}). Create, Edit Keys with SSO. Having issues? Try [```Fallback Login```]({fallback_login_link})"
+ui_message = f"👉 [```Animal Gateway Admin Panel on /ui```]({ui_link}). Create, Edit Keys with SSO. Having issues? Try [```Fallback Login```]({fallback_login_link})"
 ui_message += "\n\n💸 [```LiteLLM Model Cost Map```](https://models.litellm.ai/)."
 
 ui_message += f"\n\n🔎 [```LiteLLM Model Hub```]({model_hub_link}). See available models on the proxy. [**Docs**](https://docs.litellm.ai/docs/proxy/ai_hub)"
@@ -632,7 +632,7 @@ ui_message += f"\n\n🔎 [```LiteLLM Model Hub```]({model_hub_link}). See availa
 custom_swagger_message = "[**Customize Swagger Docs**](https://docs.litellm.ai/docs/proxy/enterprise#swagger-docs---custom-routes--branding)"
 
 ### CUSTOM BRANDING [ENTERPRISE FEATURE] ###
-_title = os.getenv("DOCS_TITLE", "LiteLLM API") if premium_user else "LiteLLM API"
+_title = os.getenv("DOCS_TITLE", "Animal Gateway API") if premium_user else "Animal Gateway API"
 _description = (
     os.getenv(
         "DOCS_DESCRIPTION",
@@ -1392,8 +1392,15 @@ origins, allow_cors_credentials = _get_cors_config()
 # get current directory
 try:
     current_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # Prefer UI bundled with the running repo checkout (e.g. /app/litellm/...) when available,
+    # so Animal Gateway branding is served instead of the upstream UI shipped in site-packages.
+    # This matters because our Docker build installs `litellm[proxy]` from PyPI for faster cached
+    # dependency installs, but still COPY this repo source into /app for customization.
+    repo_ui_path = os.path.join(os.getcwd(), "litellm", "proxy", "_experimental", "out")
     packaged_ui_path = os.path.join(current_dir, "_experimental", "out")
-    ui_path = packaged_ui_path
+
+    ui_path = repo_ui_path if os.path.isdir(repo_ui_path) else packaged_ui_path
     litellm_asset_prefix = "/litellm-asset-prefix"
 
     def _dir_has_content(path: str) -> bool:
@@ -1632,11 +1639,10 @@ try:
                         continue
 
     # # Mount the _next directory at the root level
-    app.mount(
-        "/_next",
-        StaticFiles(directory=os.path.join(ui_path, "_next")),
-        name="next_static",
-    )
+    # Mount Next.js assets.
+    # NOTE: We must mount these under the SAME `litellm_asset_prefix` that the exported HTML references.
+    # We intentionally do NOT mount `/_next` at root, to avoid collisions and to ensure the browser always
+    # loads assets from the served UI directory.
     app.mount(
         f"{litellm_asset_prefix}/_next",
         StaticFiles(directory=os.path.join(ui_path, "_next")),
@@ -12424,7 +12430,7 @@ async def model_info_v1(  # noqa: PLR0915
         raise HTTPException(
             status_code=500,
             detail={
-                "error": "LLM Model List not loaded in. Make sure you passed models in your config.yaml or on the LiteLLM Admin UI. - https://docs.litellm.ai/docs/proxy/configs"
+                "error": "LLM Model List not loaded in. Make sure you passed models in your config.yaml or on the Animal Gateway Admin UI. - https://docs.litellm.ai/docs/proxy/configs"
             },
         )
 
@@ -12432,7 +12438,7 @@ async def model_info_v1(  # noqa: PLR0915
         raise HTTPException(
             status_code=500,
             detail={
-                "error": "LLM Router is not loaded in. Make sure you passed models in your config.yaml or on the LiteLLM Admin UI. - https://docs.litellm.ai/docs/proxy/configs"
+                "error": "LLM Router is not loaded in. Make sure you passed models in your config.yaml or on the Animal Gateway Admin UI. - https://docs.litellm.ai/docs/proxy/configs"
             },
         )
 

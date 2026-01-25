@@ -4,7 +4,7 @@ jwt_display_template = """
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>LiteLLM SSO Debug - JWT Information</title>
+    <title>Animal Gateway SSO Debug - JWT Information</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         body {
@@ -197,7 +197,7 @@ jwt_display_template = """
     <div class="container">
         <div class="logo-container">
             <div class="logo">
-                🚅 LiteLLM
+                🦁 Animal Gateway
             </div>
         </div>
         <h2>SSO Debug Information</h2>
