@@ -2,6 +2,7 @@
 
 import Organizations, { fetchOrganizations } from "@/components/organizations";
 import useAuthorized from "@/app/(dashboard)/hooks/useAuthorized";
+import { withAdminAuth } from "@/app/(dashboard)/components/withAdminAuth";
 import { useEffect, useState } from "react";
 import { Organization } from "@/components/networking";
 import { fetchUserModels } from "@/components/organisms/create_key_button";
@@ -31,4 +32,4 @@ const OrganizationsPage = () => {
   );
 };
 
-export default OrganizationsPage;
+export default withAdminAuth(OrganizationsPage);

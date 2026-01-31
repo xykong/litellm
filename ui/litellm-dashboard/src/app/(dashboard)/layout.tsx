@@ -26,7 +26,7 @@ function withBase(path: string): string {
 function LayoutContent({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { accessToken, userRole, userId, userEmail, premiumUser } = useAuthorized();
+  const { accessToken, userRole, userId, userName, userEmail, premiumUser } = useAuthorized();
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
   const [page, setPage] = useState(() => {
     return searchParams.get("page") || "api-keys";
@@ -53,6 +53,7 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
           sidebarCollapsed={sidebarCollapsed}
           onToggleSidebar={toggleSidebar}
           userID={userId}
+          userName={userName}
           userEmail={userEmail}
           userRole={userRole}
           premiumUser={premiumUser}

@@ -40,6 +40,7 @@ const SearchProviderLabel: React.FC<SearchProviderLabelProps> = ({ providerName,
       onError={(e) => {
         e.currentTarget.style.display = "none";
       }}
+      unoptimized
     />
     <span>{displayName}</span>
   </div>

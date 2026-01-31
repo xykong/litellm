@@ -2,6 +2,7 @@
 
 import ClaudeCodePluginsPanel from "@/components/claude_code_plugins";
 import useAuthorized from "@/app/(dashboard)/hooks/useAuthorized";
+import { withAdminAuth } from "@/app/(dashboard)/components/withAdminAuth";
 
 const ClaudeCodePluginsPage = () => {
   const { accessToken, userRole } = useAuthorized();
@@ -14,4 +15,4 @@ const ClaudeCodePluginsPage = () => {
   );
 };
 
-export default ClaudeCodePluginsPage;
+export default withAdminAuth(ClaudeCodePluginsPage);

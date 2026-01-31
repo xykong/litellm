@@ -2,6 +2,7 @@
 
 import CacheDashboard from "@/components/cache_dashboard";
 import useAuthorized from "@/app/(dashboard)/hooks/useAuthorized";
+import { withAdminAuth } from "@/app/(dashboard)/components/withAdminAuth";
 
 const CachingPage = () => {
   const { token, accessToken, userRole, userId, premiumUser } = useAuthorized();
@@ -17,4 +18,4 @@ const CachingPage = () => {
   );
 };
 
-export default CachingPage;
+export default withAdminAuth(CachingPage);

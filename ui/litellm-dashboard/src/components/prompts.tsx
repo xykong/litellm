@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 
 import { Button } from "@tremor/react";
 import { Modal } from "antd";
@@ -27,8 +27,8 @@ const PromptsPanel: React.FC<PromptsProps> = ({ accessToken, userRole }) => {
 
   const isAdmin = userRole ? isAdminRole(userRole) : false;
 
-  const fetchPrompts = async () => {
-    if (!accessToken) {
+  const fetchPrompts = useCallback(async () => {
+    if (!accessToken || !isAdmin) {
       return;
     }
 
@@ -42,11 +42,11 @@ const PromptsPanel: React.FC<PromptsProps> = ({ accessToken, userRole }) => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [accessToken, isAdmin]);
 
   useEffect(() => {
     fetchPrompts();
-  }, [accessToken]);
+  }, [fetchPrompts]);
 
   const handlePromptClick = (promptId: string) => {
     setSelectedPromptId(promptId);

@@ -29,6 +29,7 @@ const ChatImageRenderer: React.FC<ChatImageRendererProps> = ({ message }) => {
           height={200}
           className="max-w-64 rounded-md border border-gray-200 shadow-sm"
           style={{ maxHeight: "200px", width: "auto", height: "auto" }}
+          unoptimized
         />
       )}
     </div>

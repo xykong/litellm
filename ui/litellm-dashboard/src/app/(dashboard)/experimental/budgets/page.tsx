@@ -2,6 +2,7 @@
 
 import BudgetPanel from "@/components/budgets/budget_panel";
 import useAuthorized from "@/app/(dashboard)/hooks/useAuthorized";
+import { withAdminAuth } from "@/app/(dashboard)/components/withAdminAuth";
 
 const BudgetsPage = () => {
   const { accessToken } = useAuthorized();
@@ -9,4 +10,4 @@ const BudgetsPage = () => {
   return <BudgetPanel accessToken={accessToken} />;
 };
 
-export default BudgetsPage;
+export default withAdminAuth(BudgetsPage);

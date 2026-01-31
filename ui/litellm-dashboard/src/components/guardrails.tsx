@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Button, TabGroup, TabList, Tab, TabPanels, TabPanel } from "@tremor/react";
 import { Dropdown } from "antd";
 import { DownOutlined, PlusOutlined, CodeOutlined } from "@ant-design/icons";
@@ -52,8 +52,8 @@ const GuardrailsPanel: React.FC<GuardrailsPanelProps> = ({ accessToken, userRole
 
   const isAdmin = userRole ? isAdminRole(userRole) : false;
 
-  const fetchGuardrails = async () => {
-    if (!accessToken) {
+  const fetchGuardrails = useCallback(async () => {
+    if (!accessToken || !isAdmin) {
       return;
     }
 
@@ -67,11 +67,11 @@ const GuardrailsPanel: React.FC<GuardrailsPanelProps> = ({ accessToken, userRole
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [accessToken, isAdmin]);
 
   useEffect(() => {
     fetchGuardrails();
-  }, [accessToken]);
+  }, [fetchGuardrails]);
 
   const handleAddGuardrail = () => {
     if (selectedGuardrailId) {

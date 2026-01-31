@@ -3,6 +3,7 @@
 import ViewUserDashboard from "@/components/view_users";
 import useAuthorized from "@/app/(dashboard)/hooks/useAuthorized";
 import useTeams from "@/app/(dashboard)/hooks/useTeams";
+import { withAdminAuth } from "@/app/(dashboard)/components/withAdminAuth";
 import { useState } from "react";
 
 const UsersPage = () => {
@@ -24,4 +25,4 @@ const UsersPage = () => {
   );
 };
 
-export default UsersPage;
+export default withAdminAuth(UsersPage);

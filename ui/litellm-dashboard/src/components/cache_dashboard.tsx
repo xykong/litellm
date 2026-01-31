@@ -15,9 +15,10 @@ import {
   TabPanels,
   Text,
 } from "@tremor/react";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import NotificationsManager from "./molecules/notifications_manager";
 import UsageDatePicker from "./shared/usage_date_picker";
+import { isAdminRole } from "@/utils/roles";
 
 import { RefreshIcon } from "@heroicons/react/outline";
 import { adminGlobalCacheActivity, cachingHealthCheckCall } from "./networking";
@@ -113,23 +114,26 @@ const CacheDashboard: React.FC<CachePageProps> = ({ accessToken, token, userRole
   const [lastRefreshed, setLastRefreshed] = useState("");
   const [healthCheckResponse, setHealthCheckResponse] = useState<any>("");
 
-  useEffect(() => {
-    if (!accessToken || !dateValue) {
+  const isAdmin = userRole ? isAdminRole(userRole) : false;
+
+  const fetchData = useCallback(async () => {
+    if (!accessToken || !dateValue || !isAdmin) {
       return;
     }
-    const fetchData = async () => {
-      const response = await adminGlobalCacheActivity(
-        accessToken,
-        formatDateWithoutTZ(dateValue.from),
-        formatDateWithoutTZ(dateValue.to),
-      );
-      setData(response);
-    };
-    fetchData();
+    const response = await adminGlobalCacheActivity(
+      accessToken,
+      formatDateWithoutTZ(dateValue.from),
+      formatDateWithoutTZ(dateValue.to),
+    );
+    setData(response);
 
     const currentDate = new Date();
     setLastRefreshed(currentDate.toLocaleString());
-  }, [accessToken]);
+  }, [accessToken, dateValue, isAdmin]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const uniqueApiKeys = Array.from(new Set(data.map((item) => item?.api_key ?? "")));
   const uniqueModels = Array.from(new Set(data.map((item) => item?.model ?? "")));

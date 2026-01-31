@@ -2,6 +2,7 @@
 
 import UIThemeSettings from "@/components/ui_theme_settings";
 import useAuthorized from "@/app/(dashboard)/hooks/useAuthorized";
+import { withAdminAuth } from "@/app/(dashboard)/components/withAdminAuth";
 
 const UIThemePage = () => {
   const { userId, userRole, accessToken } = useAuthorized();
@@ -9,4 +10,4 @@ const UIThemePage = () => {
   return <UIThemeSettings userID={userId} userRole={userRole} accessToken={accessToken} />;
 };
 
-export default UIThemePage;
+export default withAdminAuth(UIThemePage);

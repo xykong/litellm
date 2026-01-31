@@ -6,8 +6,10 @@ import LoadingScreen from "@/components/common_components/LoadingScreen";
 import { getProxyBaseUrl } from "@/components/networking";
 import { getCookie } from "@/utils/cookieUtils";
 import { isJwtExpired } from "@/utils/jwtUtils";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { InfoCircleOutlined } from "@ant-design/icons";
 import { Alert, Button, Card, Form, Input, Popover, Space, Typography } from "antd";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -25,7 +27,7 @@ function LoginPageContent() {
     }
 
     // Check if admin UI is disabled
-    if (uiConfig && uiConfig.admin_ui_disabled) {
+    if (uiConfig?.admin_ui_disabled) {
       setIsLoading(false);
       return;
     }
@@ -36,7 +38,7 @@ function LoginPageContent() {
       return;
     }
 
-    if (uiConfig && uiConfig.auto_redirect_to_sso) {
+    if (uiConfig?.auto_redirect_to_sso) {
       router.push(`${getProxyBaseUrl()}/sso/key/generate`);
       return;
     }
@@ -58,87 +60,88 @@ function LoginPageContent() {
   const error = loginMutation.error instanceof Error ? loginMutation.error.message : null;
   const isLoginLoading = loginMutation.isPending;
 
-  const { Title, Text, Paragraph } = Typography;
-
   if (isConfigLoading || isLoading) {
     return <LoadingScreen />;
   }
 
   // Show disabled message if admin UI is disabled
-  if (uiConfig && uiConfig.admin_ui_disabled) {
+  if (uiConfig?.admin_ui_disabled) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Card className="w-full max-w-lg shadow-md">
-          <Space direction="vertical" size="middle" className="w-full">
-            <div className="text-center">
-              <Title level={2}>🐾 Animal Gateway</Title>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+        <div className="w-full max-w-md">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+            <div className="flex flex-col items-center mb-6">
+              <div className="relative w-16 h-16 mb-4">
+                <Image
+                  src="/assets/logos/litellm_logo.jpg"
+                  alt="Animal Gateway Logo"
+                  fill
+                  className="object-contain rounded-lg"
+                  priority
+                  unoptimized
+                />
+              </div>
+              <h1 className="text-2xl font-semibold text-gray-900">Animal Gateway</h1>
             </div>
 
             <Alert
               message="Admin UI Disabled"
               description={
-                <>
-                  <Paragraph className="text-sm">
+                <div className="space-y-2">
+                  <p className="text-sm text-gray-600">
                     The Admin UI has been disabled by the administrator. To re-enable it, please update the following
                     environment variable:
-                  </Paragraph>
-                  <Paragraph className="text-sm">
-                    <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">DISABLE_ADMIN_UI=False</code>
-                  </Paragraph>
-                </>
+                  </p>
+                  <code className="block bg-gray-100 px-3 py-2 rounded text-xs font-mono text-gray-800">
+                    DISABLE_ADMIN_UI=False
+                  </code>
+                </div>
               }
               type="warning"
               showIcon
+              className="rounded-lg"
             />
-          </Space>
-        </Card>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <Card className="w-full max-w-lg shadow-md">
-        <Space direction="vertical" size="middle" className="w-full">
-          <div className="text-center">
-            <Title level={2}>🐾 Animal Gateway</Title>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 sm:px-6 lg:px-8">
+      <div className="w-full max-w-md">
+        <div className="flex flex-col items-center mb-8">
+          <div className="relative w-20 h-20 mb-6">
+            <Image
+              src="/assets/logos/litellm_logo.jpg"
+              alt="Animal Gateway Logo"
+              fill
+              className="object-contain rounded-xl"
+              priority
+              unoptimized
+            />
           </div>
+          <h1 className="text-3xl font-semibold text-gray-900 tracking-tight">Animal Gateway</h1>
+          <p className="mt-2 text-sm text-gray-600">Sign in to access your admin dashboard</p>
+        </div>
 
-          <div className="text-center">
-            <Title level={3}>Login</Title>
-            <Text type="secondary">Access your Animal Gateway Admin UI.</Text>
-          </div>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+          {error && (
+            <Alert
+              message="Login Failed"
+              description={error}
+              type="error"
+              showIcon
+              className="mb-6 rounded-lg"
+              role="alert"
+            />
+          )}
 
-          <Alert
-            message="Default Credentials"
-            description={
-              <>
-                <Paragraph className="text-sm">
-                  By default, Username is <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">admin</code> and
-                  Password is your set Animal Gateway Proxy
-                  <code className="bg-gray-100 px-1 py-0.5 rounded text-xs">MASTER_KEY</code>.
-                </Paragraph>
-                <Paragraph className="text-sm">
-                  Need to set UI credentials or SSO?{" "}
-                  <a href="https://docs.litellm.ai/docs/proxy/ui" target="_blank" rel="noopener noreferrer">
-                    Check the documentation
-                  </a>
-                  .
-                </Paragraph>
-              </>
-            }
-            type="info"
-            icon={<InfoCircleOutlined />}
-            showIcon
-          />
-
-          {error && <Alert message={error} type="error" showIcon />}
-
-          <Form onFinish={handleSubmit} layout="vertical" requiredMark={true}>
+          <Form onFinish={handleSubmit} layout="vertical" requiredMark={false}>
             <Form.Item
-              label="Username"
+              label={<span className="text-sm font-medium text-gray-700">Username</span>}
               name="username"
-              rules={[{ required: true, message: "Please enter your username" }]}
+              rules={[{ required: true, message: "Username is required" }]}
             >
               <Input
                 placeholder="Enter your username"
@@ -147,14 +150,15 @@ function LoginPageContent() {
                 onChange={(e) => setUsername(e.target.value)}
                 disabled={isLoginLoading}
                 size="large"
-                className="rounded-md border-gray-300"
+                className="rounded-lg"
+                aria-label="Username"
               />
             </Form.Item>
 
             <Form.Item
-              label="Password"
+              label={<span className="text-sm font-medium text-gray-700">Password</span>}
               name="password"
-              rules={[{ required: true, message: "Please enter your password" }]}
+              rules={[{ required: true, message: "Password is required" }]}
             >
               <Input.Password
                 placeholder="Enter your password"
@@ -163,10 +167,12 @@ function LoginPageContent() {
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isLoginLoading}
                 size="large"
+                className="rounded-lg"
+                aria-label="Password"
               />
             </Form.Item>
 
-            <Form.Item>
+            <Form.Item className="mb-0">
               <Button
                 type="primary"
                 htmlType="submit"
@@ -174,44 +180,55 @@ function LoginPageContent() {
                 disabled={isLoginLoading}
                 block
                 size="large"
+                className="h-12 rounded-lg font-medium bg-blue-600 hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200"
+                style={{ minHeight: "44px" }}
               >
-                {isLoginLoading ? "Logging in..." : "Login"}
+                {isLoginLoading ? "Signing in..." : "Sign in"}
               </Button>
             </Form.Item>
-            <Form.Item>
-              {!uiConfig?.sso_configured ? (
-                <Popover
-                  content="Please configure SSO to log in with SSO."
-                  trigger="hover"
-                >
-                  <Button disabled block size="large">
-                    Login with SSO
-                  </Button>
-                </Popover>
-              ) : (
-                <Button
-                  disabled={isLoginLoading}
-                  onClick={() =>
-                    router.push(`${getProxyBaseUrl()}/sso/key/generate`)
-                  }
-                  block
-                  size="large"
-                >
-                  Login with SSO
-                </Button>
-              )}
-            </Form.Item>
           </Form>
-        </Space>
-        {uiConfig?.sso_configured && (
-          <Alert
-            type="info"
-            showIcon
-            closable
-            message={<Text>Single Sign-On (SSO) is enabled. LiteLLM no longer automatically redirects to the SSO login flow upon loading this page. To re-enable auto-redirect-to-SSO, set <Text code>AUTO_REDIRECT_UI_LOGIN_TO_SSO=true</Text> in your environment configuration.</Text>}
-          />
-        )}
-      </Card>
+
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-200"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-4 bg-white text-gray-500">or</span>
+            </div>
+          </div>
+
+          <Button
+            type="default"
+            block
+            size="large"
+            onClick={() => {
+              window.location.href = `${getProxyBaseUrl()}/sso/happyelements/login`;
+            }}
+            className="h-12 rounded-lg font-medium border-gray-300 hover:border-gray-400 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200 cursor-pointer"
+            style={{ minHeight: "44px" }}
+            aria-label="Sign in with HappyElements SSO"
+          >
+            <span className="flex items-center justify-center">
+              <svg
+                className="w-5 h-5 mr-2"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                xmlns="http://www.w3.org/2000/svg"
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                />
+              </svg>
+              Sign in with HappyElements SSO
+            </span>
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

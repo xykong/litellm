@@ -2,11 +2,12 @@
 
 import GuardrailsPanel from "@/components/guardrails";
 import useAuthorized from "@/app/(dashboard)/hooks/useAuthorized";
+import { withAdminAuth } from "@/app/(dashboard)/components/withAdminAuth";
 
 const GuardrailsPage = () => {
-  const { accessToken } = useAuthorized();
+  const { accessToken, userRole } = useAuthorized();
 
-  return <GuardrailsPanel accessToken={accessToken} />;
+  return <GuardrailsPanel accessToken={accessToken} userRole={userRole} />;
 };
 
-export default GuardrailsPage;
+export default withAdminAuth(GuardrailsPage);

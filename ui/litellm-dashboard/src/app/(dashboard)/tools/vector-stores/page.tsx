@@ -2,6 +2,7 @@
 
 import VectorStoreManagement from "@/components/vector_store_management";
 import useAuthorized from "@/app/(dashboard)/hooks/useAuthorized";
+import { withAdminAuth } from "@/app/(dashboard)/components/withAdminAuth";
 
 const VectorStoresPage = () => {
   const { accessToken, userId, userRole } = useAuthorized();
@@ -9,4 +10,4 @@ const VectorStoresPage = () => {
   return <VectorStoreManagement accessToken={accessToken} userID={userId} userRole={userRole} />;
 };
 
-export default VectorStoresPage;
+export default withAdminAuth(VectorStoresPage);
