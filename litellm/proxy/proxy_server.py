@@ -1651,6 +1651,19 @@ try:
     )
     # print(f"mounted _next at {server_root_path}/ui/_next")
 
+    assets_path = os.path.join(ui_path, "assets")
+    if os.path.exists(assets_path) and os.path.isdir(assets_path):
+        app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
+        verbose_proxy_logger.info(f"Mounted assets directory at /assets")
+
+    favicon_path = os.path.join(ui_path, "favicon.ico")
+    if os.path.exists(favicon_path):
+        from fastapi.responses import FileResponse
+        
+        @app.get("/favicon.ico", include_in_schema=False)
+        async def favicon():
+            return FileResponse(favicon_path)
+
     app.mount("/ui", StaticFiles(directory=ui_path, html=True), name="ui")
 
     def _restructure_ui_html_files(ui_root: str) -> None:
