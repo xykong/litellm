@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Icon, Button, Col, Text, Grid } from "@tremor/react";
 import { RefreshIcon } from "@heroicons/react/outline";
 import TagInfoView from "./tag_info";
@@ -35,7 +35,7 @@ const TagManagement: React.FC<TagProps> = ({ accessToken, userID, userRole }) =>
   const [lastRefreshed, setLastRefreshed] = useState("");
   const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
 
-  const fetchTags = async () => {
+  const fetchTags = useCallback(async () => {
     if (!accessToken) return;
     try {
       const response = await tagListCall(accessToken);
@@ -45,7 +45,7 @@ const TagManagement: React.FC<TagProps> = ({ accessToken, userID, userRole }) =>
       console.error("Error fetching tags:", error);
       NotificationsManager.fromBackend("Error fetching tags: " + error);
     }
-  };
+  }, [accessToken]);
 
   const handleRefreshClick = () => {
     fetchTags();
@@ -113,7 +113,7 @@ const TagManagement: React.FC<TagProps> = ({ accessToken, userID, userRole }) =>
 
   useEffect(() => {
     fetchTags();
-  }, [accessToken]);
+  }, [fetchTags]);
 
   return (
     <div className="w-full mx-4 h-[75vh]">

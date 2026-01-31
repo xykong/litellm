@@ -11,6 +11,7 @@ class ReturnedUITokenObject(TypedDict):
     user_id: str
     key: str
     user_email: Optional[str]
+    user_name: Optional[str]  # Display name for the user
     user_role: str
     login_method: Literal["sso", "username_password"]
     premium_user: bool

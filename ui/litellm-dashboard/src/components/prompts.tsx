@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 
 import { Button } from "@tremor/react";
-import { Modal, Select } from "antd";
+import { Modal } from "antd";
 import { getPromptsList, PromptSpec, ListPromptsResponse, deletePromptCall } from "./networking";
 import PromptTable from "./prompts/prompt_table";
 import PromptInfoView from "./prompts/prompt_info";
@@ -18,7 +18,6 @@ interface PromptsProps {
 const PromptsPanel: React.FC<PromptsProps> = ({ accessToken, userRole }) => {
   const [promptsList, setPromptsList] = useState<PromptSpec[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedEnvironment, setSelectedEnvironment] = useState<string | undefined>(undefined);
   const [selectedPromptId, setSelectedPromptId] = useState<string | null>(null);
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
   const [showEditorView, setShowEditorView] = useState(false);
@@ -30,14 +29,14 @@ const PromptsPanel: React.FC<PromptsProps> = ({ accessToken, userRole }) => {
   // Admin Viewer follows the read-parity rule: see prompts, no writes.
   const canModify = userRole ? isProxyAdminRole(userRole) : false;
 
-  const fetchPrompts = async () => {
-    if (!accessToken) {
+  const fetchPrompts = useCallback(async () => {
+    if (!accessToken || !isAdmin) {
       return;
     }
 
     setIsLoading(true);
     try {
-      const response: ListPromptsResponse = await getPromptsList(accessToken, selectedEnvironment);
+      const response: ListPromptsResponse = await getPromptsList(accessToken);
       console.log(`prompts: ${JSON.stringify(response)}`);
       setPromptsList(response.prompts);
     } catch (error) {
@@ -45,11 +44,11 @@ const PromptsPanel: React.FC<PromptsProps> = ({ accessToken, userRole }) => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [accessToken, isAdmin]);
 
   useEffect(() => {
     fetchPrompts();
-  }, [accessToken, selectedEnvironment]);
+  }, [fetchPrompts]);
 
   const handlePromptClick = (promptId: string) => {
     setSelectedPromptId(promptId);
@@ -149,18 +148,6 @@ const PromptsPanel: React.FC<PromptsProps> = ({ accessToken, userRole }) => {
                 </>
               )}
             </div>
-            <Select
-              placeholder="All Environments"
-              allowClear
-              value={selectedEnvironment}
-              onChange={(value) => setSelectedEnvironment(value)}
-              style={{ width: 180 }}
-              options={[
-                { label: "Development", value: "development" },
-                { label: "Staging", value: "staging" },
-                { label: "Production", value: "production" },
-              ]}
-            />
           </div>
 
           <PromptTable
