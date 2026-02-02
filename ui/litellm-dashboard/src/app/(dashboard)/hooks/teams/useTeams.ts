@@ -10,6 +10,7 @@ import {
   deriveErrorMessage,
   handleError,
 } from "@/components/networking";
+import { isAdminRole } from "@/utils/roles";
 
 export interface TeamsResponse {
   teams: Team[];
@@ -94,10 +95,11 @@ export const teamListCall = async (
 const teamKeys = createQueryKeys("teams");
 export const useTeams = (): UseQueryResult<Team[]> => {
   const { accessToken, userId, userRole } = useAuthorized();
+  const isAdmin = userRole ? isAdminRole(userRole) : false;
   return useQuery<Team[]>({
     queryKey: teamKeys.list({}),
     queryFn: async () => await fetchTeams(accessToken!, userId, userRole, null),
-    enabled: Boolean(accessToken),
+    enabled: Boolean(accessToken) && isAdmin,
   });
 };
 
@@ -230,13 +232,14 @@ export const useDeletedTeams = (
   pageSize: number,
   options: TeamListCallOptions = {},
 ): UseQueryResult<DeletedTeam[]> => {
-  const { accessToken } = useAuthorized();
+  const { accessToken, userRole } = useAuthorized();
+  const isAdmin = userRole ? isAdminRole(userRole) : false;
 
   return useQuery<DeletedTeam[]>({
     queryKey: deletedTeamKeys.list({ page, limit: pageSize, ...options }),
     queryFn: async () => await deletedTeamListCall(accessToken!, page, pageSize, options),
-    enabled: Boolean(accessToken),
-    staleTime: 30000, // 30 seconds
+    enabled: Boolean(accessToken) && isAdmin,
+    staleTime: 30000,
     placeholderData: keepPreviousData,
   });
 };
