@@ -72,7 +72,7 @@ const PoliciesPanel: React.FC<PoliciesPanelProps> = ({
   const isAdmin = userRole ? isAdminRole(userRole) : false;
 
   const fetchPolicies = useCallback(async () => {
-    if (!accessToken) return;
+    if (!accessToken || !isAdmin) return;
 
     setIsLoading(true);
     try {
@@ -84,10 +84,10 @@ const PoliciesPanel: React.FC<PoliciesPanelProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [accessToken]);
+  }, [accessToken, isAdmin]);
 
   const fetchAttachments = useCallback(async () => {
-    if (!accessToken) return;
+    if (!accessToken || !isAdmin) return;
 
     setIsAttachmentsLoading(true);
     try {
@@ -99,10 +99,10 @@ const PoliciesPanel: React.FC<PoliciesPanelProps> = ({
     } finally {
       setIsAttachmentsLoading(false);
     }
-  }, [accessToken]);
+  }, [accessToken, isAdmin]);
 
   const fetchGuardrails = useCallback(async () => {
-    if (!accessToken) return;
+    if (!accessToken || !isAdmin) return;
 
     try {
       const response = await getGuardrailsList(accessToken);
@@ -110,7 +110,7 @@ const PoliciesPanel: React.FC<PoliciesPanelProps> = ({
     } catch (error) {
       console.error("Error fetching guardrails:", error);
     }
-  }, [accessToken]);
+  }, [accessToken, isAdmin]);
 
   useEffect(() => {
     fetchPolicies();
