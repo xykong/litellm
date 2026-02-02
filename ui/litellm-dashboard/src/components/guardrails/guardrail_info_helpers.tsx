@@ -124,7 +124,7 @@ export const guardrailLogoMap: Record<string, string> = {
   "OpenAI Moderation": `${asset_logos_folder}openai_small.svg`,
   EnkryptAI: `${asset_logos_folder}enkrypt_ai.avif`,
   "Prompt Security": `${asset_logos_folder}prompt_security.png`,
-  "LiteLLM Content Filter": `${asset_logos_folder}litellm_logo.jpg`,
+  "LiteLLM Content Filter": `${asset_logos_folder}animal_gateway_logo.jpg`,
 };
 
 export const getGuardrailLogoAndName = (guardrailValue: string): { logo: string; displayName: string } => {

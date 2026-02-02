@@ -40,8 +40,9 @@ async def google_generate_content(
 
     data = await _read_request_body(request=request)
     if "model" not in data:
-        data["model"] = model_name
-
+        # Auto-add gemini/ prefix for Google Gemini Provider native API
+        router_model_name = f"gemini/{model_name}" if not model_name.startswith("gemini/") else model_name
+        data["model"] = router_model_name
     # Extract generationConfig and pass it as config parameter
     generation_config = data.pop("generationConfig", None)
     if generation_config:
@@ -101,9 +102,10 @@ async def google_stream_generate_content(
     data = await _read_request_body(request=request)
 
     if "model" not in data:
-        data["model"] = model_name
+        router_model_name = f"gemini/{model_name}" if not model_name.startswith("gemini/") else model_name
+        data["model"] = router_model_name
 
-    data["stream"] = True  # enforce streaming for this endpoint
+    data["stream"] = True
 
     # Extract generationConfig and pass it as config parameter
     generation_config = data.pop("generationConfig", None)
