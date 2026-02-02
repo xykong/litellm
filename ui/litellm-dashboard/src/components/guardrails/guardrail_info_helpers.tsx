@@ -136,9 +136,9 @@ export const guardrailLogoMap: Record<string, string> = {
   "Prompt Security": `${asset_logos_folder}prompt_security.png`,
   PromptGuard: `${asset_logos_folder}promptguard.svg`,
   XecGuard: `${asset_logos_folder}xecguard.svg`,
-  "LiteLLM Content Filter": `${asset_logos_folder}litellm_logo.jpg`,
-  "LiteLLM LLM as a Judge": `${asset_logos_folder}litellm_logo.jpg`,
-  "Akto": `${asset_logos_folder}akto.svg`,
+  "LiteLLM Content Filter": `${asset_logos_folder}animal_gateway_logo.jpg`,
+  "LiteLLM LLM as a Judge": `${asset_logos_folder}animal_gateway_logo.jpg`,
+  Akto: `${asset_logos_folder}akto.svg`,
   "Qostodian Nexus": `${asset_logos_folder}qohash.jpg`,
 };
 

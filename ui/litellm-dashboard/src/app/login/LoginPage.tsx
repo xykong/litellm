@@ -134,7 +134,7 @@ function LoginPageContent() {
             <div className="flex flex-col items-center mb-6">
               <div className="relative w-16 h-16 mb-4">
                 <Image
-                  src="/assets/logos/litellm_logo.jpg"
+                  src="/assets/logos/animal_gateway_logo.jpg"
                   alt="Animal Gateway Logo"
                   fill
                   className="object-contain rounded-lg"
@@ -174,7 +174,7 @@ function LoginPageContent() {
         <div className="flex flex-col items-center mb-8">
           <div className="relative w-20 h-20 mb-6">
             <Image
-              src="/assets/logos/litellm_logo.jpg"
+              src="/assets/logos/animal_gateway_logo.jpg"
               alt="Animal Gateway Logo"
               fill
               className="object-contain rounded-xl"

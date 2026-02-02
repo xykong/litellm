@@ -41,8 +41,11 @@ async def google_generate_content(
     )
 
     data = await _read_request_body(request=request)
+    router_model_name = (
+        model_name if model_name.startswith("gemini/") else f"gemini/{model_name}"
+    )
     if "model" not in data:
-        data["model"] = model_name
+        data["model"] = router_model_name
 
     processor = ProxyBaseLLMRequestProcessing(data=data)
     try:
@@ -56,7 +59,7 @@ async def google_generate_content(
             general_settings=general_settings,
             proxy_config=proxy_config,
             select_data_generator=select_data_generator,
-            model=model_name,
+            model=router_model_name,
             user_model=user_model,
             user_temperature=user_temperature,
             user_request_timeout=user_request_timeout,
@@ -102,8 +105,11 @@ async def google_stream_generate_content(
     )
 
     data = await _read_request_body(request=request)
+    router_model_name = (
+        model_name if model_name.startswith("gemini/") else f"gemini/{model_name}"
+    )
     if "model" not in data:
-        data["model"] = model_name
+        data["model"] = router_model_name
     data["stream"] = True
 
     processor = ProxyBaseLLMRequestProcessing(data=data)
@@ -118,7 +124,7 @@ async def google_stream_generate_content(
             general_settings=general_settings,
             proxy_config=proxy_config,
             select_data_generator=select_data_generator,
-            model=model_name,
+            model=router_model_name,
             user_model=user_model,
             user_temperature=user_temperature,
             user_request_timeout=user_request_timeout,
