@@ -4,7 +4,7 @@ import APIReferenceView from "@/app/(dashboard)/api-reference/APIReferenceView";
 import SidebarProvider from "@/app/(dashboard)/components/SidebarProvider";
 import OldModelDashboard from "@/app/(dashboard)/models-and-endpoints/ModelsAndEndpointsView";
 import PlaygroundPage from "@/app/(dashboard)/playground/page";
-import AdminPanel from "@/components/admins";
+import AdminPanel from "@/components/AdminPanel";
 import AgentsPanel from "@/components/agents";
 import BudgetPanel from "@/components/budgets/budget_panel";
 import CacheDashboard from "@/components/cache_dashboard";
@@ -27,7 +27,7 @@ import Organizations, { fetchOrganizations } from "@/components/organizations";
 import PassThroughSettings from "@/components/pass_through_settings";
 import PromptsPanel from "@/components/prompts";
 import PublicModelHub from "@/components/public_model_hub";
-import { SearchTools } from "@/components/search_tools";
+import SearchTools from "@/components/SearchTools/SearchTools";
 import Settings from "@/components/settings";
 import { ClaudeCodePrompt, ClaudeCodeModal } from "@/components/survey";
 import TagManagement from "@/components/tag_management";
@@ -100,7 +100,7 @@ interface ProxySettings {
 
 const queryClient = new QueryClient();
 
-export default function CreateKeyPage() {
+function CreateKeyPage() {
   const [userRole, setUserRole] = useState("");
   const [premiumUser, setPremiumUser] = useState(false);
   const [disabledPersonalKeyCreation, setDisabledPersonalKeyCreation] = useState(false);
@@ -281,10 +281,6 @@ export default function CreateKeyPage() {
           const nudgesConfig = await getInProductNudgesCall(accessToken);
           const isUsingClaudeCode = nudgesConfig?.is_claude_code_enabled || false;
           setIsClaudeCode(isUsingClaudeCode);
-          
-          if (isUsingClaudeCode) {
-            setShowClaudeCodePrompt(true);
-          }
         } catch (error) {
           console.error("Failed to fetch in-product nudges:", error);
         }
@@ -326,7 +322,6 @@ export default function CreateKeyPage() {
   }
 
   return (
-    <Suspense fallback={<LoadingScreen />}>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider accessToken={accessToken}>
           {invitation_id ? (
@@ -422,15 +417,7 @@ export default function CreateKeyPage() {
                     premiumUser={premiumUser}
                   />
                 ) : page == "admin-panel" ? (
-                  <AdminPanel
-                    setTeams={setTeams}
-                    searchParams={searchParams}
-                    accessToken={accessToken}
-                    userID={userID}
-                    showSSOBanner={showSSOBanner}
-                    premiumUser={premiumUser}
-                    proxySettings={proxySettings}
-                  />
+                <AdminPanel proxySettings={proxySettings} />
                 ) : page == "api_ref" ? (
                   <APIReferenceView proxySettings={proxySettings} />
                 ) : page == "logging-and-alerts" ? (
@@ -536,6 +523,13 @@ export default function CreateKeyPage() {
           )}
         </ThemeProvider>
       </QueryClientProvider>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={<LoadingScreen />}>
+      <CreateKeyPage />
     </Suspense>
   );
 }

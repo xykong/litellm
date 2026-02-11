@@ -60,8 +60,6 @@ function LayoutContent({ children }: { children: React.ReactNode }) {
           proxySettings={undefined}
           setProxySettings={() => { }}
           accessToken={accessToken}
-          isDarkMode={false}
-          toggleDarkMode={() => { }}
         />
         <DebugWarningBanner />
         <div className="flex flex-1 overflow-auto">
