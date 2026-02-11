@@ -24,7 +24,7 @@ interface ThemeProviderProps {
 }
 
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children, accessToken }) => {
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>("/assets/logos/animal_gateway_logo.jpg");
   const [faviconUrl, setFaviconUrl] = useState<string | null>(null);
 
   useEffect(() => {
