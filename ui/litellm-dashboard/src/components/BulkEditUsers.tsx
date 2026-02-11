@@ -155,7 +155,7 @@ const BulkEditUserModal: React.FC<BulkEditUserModalProps> = ({
             const result = await teamBulkMemberAddCall(
               accessToken,
               teamId,
-              members ? members : null,
+              members,
               teamBudget || undefined,
               updateAllUsers,
             );
