@@ -8,11 +8,11 @@ from typing import List, Optional, Union, Dict, Any
 import os
 import httpx
 from litellm.types.llms.openai import AllEmbeddingInputValues, AllMessageValues
-from litellm.types.utils import EmbeddingResponse, Embeddings, Usage
+from litellm.types.utils import EmbeddingResponse, Embedding, Usage
 from litellm.litellm_core_utils.litellm_logging import Logging as LiteLLMLoggingObj
 from litellm.llms.base_llm.embedding.transformation import BaseEmbeddingConfig
 from litellm.llms.base_llm.chat.transformation import BaseLLMException
-from ..common_utils import get_volcengine_base_url, get_volcengine_headers
+from ..common_utils import get_volcengine_base_url, get_volcengine_headers, VolcEngineError
 
 
 class VolcEngineEmbeddingConfig(BaseEmbeddingConfig):
@@ -335,7 +335,8 @@ class VolcEngineEmbeddingConfig(BaseEmbeddingConfig):
                 embedding_vector = embedding_vector["embedding"]
             
             embeddings_list.append(
-                Embeddings(
+                Embedding(
+                    object="embedding",
                     embedding=embedding_vector,
                     index=item.get("index", idx),
                 )
