@@ -13,6 +13,7 @@ import UserDropdown from "./Navbar/UserDropdown/UserDropdown";
 
 interface NavbarProps {
   userID: string | null;
+  userName?: string | null;
   userEmail: string | null;
   userRole: string | null;
   premiumUser: boolean;
@@ -22,8 +23,8 @@ interface NavbarProps {
   isPublicPage: boolean;
   sidebarCollapsed?: boolean;
   onToggleSidebar?: () => void;
-  isDarkMode: boolean;
-  toggleDarkMode: () => void;
+  isDarkMode?: boolean;
+  toggleDarkMode?: () => void;
 }
 
 const Navbar: React.FC<NavbarProps> = ({
@@ -136,14 +137,6 @@ const Navbar: React.FC<NavbarProps> = ({
                 unCheckedChildren={<SunOutlined />}
               />
             )}
-            {!isPublicPage && (
-              <UserDropdown onLogout={handleLogout} />
-            )}
-            <Button type="text" href="https://docs.litellm.ai/docs/" target="_blank" rel="noopener noreferrer">
-              Docs
-            </Button>
-            <BlogDropdown />
-
             {!isPublicPage && <UserDropdown onLogout={handleLogout} />}
           </div>
         </div>
