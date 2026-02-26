@@ -7,8 +7,6 @@ import { MenuFoldOutlined, MenuUnfoldOutlined, MoonOutlined, SunOutlined } from 
 import { Button, Switch, Tag } from "antd";
 import Link from "next/link";
 import React, { useEffect, useState } from "react";
-import { BlogDropdown } from "./Navbar/BlogDropdown/BlogDropdown";
-import { CommunityEngagementButtons } from "./Navbar/CommunityEngagementButtons/CommunityEngagementButtons";
 import UserDropdown from "./Navbar/UserDropdown/UserDropdown";
 
 interface NavbarProps {
@@ -125,7 +123,7 @@ const Navbar: React.FC<NavbarProps> = ({
           </div>
           {/* Right side nav items */}
           <div className="flex items-center space-x-5 ml-auto">
-            <CommunityEngagementButtons />
+
             {/* Dark mode is currently a work in progress. To test, you can change 'false' to 'true' below.
             Do not set this to true by default until all components are confirmed to support dark mode styles. */}
             {false && (
