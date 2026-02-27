@@ -3077,10 +3077,15 @@ class SSOAuthenticationHandler:
         """
         Gets the user email and id from the OpenID result after validating the email domain
         """
-        user_email: Optional[str] = normalize_email(getattr(result, "email", None))
-        user_id: Optional[str] = (
-            getattr(result, "id", None) if result is not None else None
-        )
+        # Handle both dict and object types
+        if isinstance(result, dict):
+            user_email: Optional[str] = normalize_email(result.get("email", None))
+            user_id: Optional[str] = result.get("id", None)
+        else:
+            user_email: Optional[str] = normalize_email(getattr(result, "email", None))
+            user_id: Optional[str] = (
+                getattr(result, "id", None) if result is not None else None
+            )
         user_role: Optional[str] = None
 
         if user_email is not None and os.getenv("ALLOWED_EMAIL_DOMAINS") is not None:
@@ -3098,7 +3103,10 @@ class SSOAuthenticationHandler:
 
         # Extract user_role from result (works for all SSO providers)
         if result is not None:
-            _user_role = getattr(result, "user_role", None)
+            if isinstance(result, dict):
+                _user_role = result.get("user_role", None)
+            else:
+                _user_role = getattr(result, "user_role", None)
             if _user_role is not None:
                 # Convert enum to string if needed
                 user_role = (
@@ -3115,10 +3123,17 @@ class SSOAuthenticationHandler:
             generic_user_role_attribute_name = os.getenv(
                 "GENERIC_USER_ROLE_ATTRIBUTE", "role"
             )
-            user_id = getattr(result, "id", None)
-            user_email = normalize_email(getattr(result, "email", None))
+            if isinstance(result, dict):
+                user_id = result.get("id", None)
+                user_email = normalize_email(result.get("email", None))
+            else:
+                user_id = getattr(result, "id", None)
+                user_email = normalize_email(getattr(result, "email", None))
             if user_role is None:
-                _role_from_attr = getattr(result, generic_user_role_attribute_name, None)  # type: ignore
+                if isinstance(result, dict):
+                    _role_from_attr = result.get(generic_user_role_attribute_name, None)
+                else:
+                    _role_from_attr = getattr(result, generic_user_role_attribute_name, None)  # type: ignore
                 if _role_from_attr is not None:
                     # Convert enum to string if needed
                     user_role = (
@@ -3128,8 +3143,12 @@ class SSOAuthenticationHandler:
                     )
 
         if user_id is None and result is not None:
-            _first_name = getattr(result, "first_name", "") or ""
-            _last_name = getattr(result, "last_name", "") or ""
+            if isinstance(result, dict):
+                _first_name = result.get("first_name", "") or ""
+                _last_name = result.get("last_name", "") or ""
+            else:
+                _first_name = getattr(result, "first_name", "") or ""
+                _last_name = getattr(result, "last_name", "") or ""
             user_id = _first_name + _last_name
 
         if user_email is not None and (user_id is None or len(user_id) == 0):
