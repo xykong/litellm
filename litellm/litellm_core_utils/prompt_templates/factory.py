@@ -2484,6 +2484,118 @@ def sanitize_messages_for_tool_calling(
     return sanitized_messages
 
 
+def sanitize_anthropic_native_messages_for_tool_calling(
+    messages: List[AllMessageValues],
+) -> List[AllMessageValues]:
+    if not litellm.modify_params:
+        return messages
+
+    sanitized_messages = copy.deepcopy(messages)
+    message_index = 0
+
+    while message_index < len(sanitized_messages):
+        current_message = sanitized_messages[message_index]
+
+        if current_message.get("role") != "assistant":
+            message_index += 1
+            continue
+
+        content = current_message.get("content")
+        if not isinstance(content, list):
+            message_index += 1
+            continue
+
+        non_tool_use_blocks = []
+        tool_use_blocks = []
+        saw_tool_use = False
+        reorder_needed = False
+
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "tool_use":
+                saw_tool_use = True
+                tool_use_blocks.append(block)
+            else:
+                if saw_tool_use:
+                    reorder_needed = True
+                non_tool_use_blocks.append(block)
+
+        if reorder_needed:
+            current_message["content"] = non_tool_use_blocks + tool_use_blocks  # type: ignore
+            content = current_message["content"]
+
+        tool_uses = [
+            block
+            for block in content
+            if isinstance(block, dict) and block.get("type") == "tool_use"
+        ]
+        if not tool_uses:
+            message_index += 1
+            continue
+
+        next_message = None
+        if message_index + 1 < len(sanitized_messages):
+            candidate_next_message = sanitized_messages[message_index + 1]
+            if candidate_next_message.get("role") == "user":
+                next_message = candidate_next_message
+
+        next_tool_result_ids: Set[str] = set()
+        if next_message is not None:
+            next_content = next_message.get("content")
+            if isinstance(next_content, list):
+                for block in next_content:
+                    if isinstance(block, dict) and block.get("type") == "tool_result":
+                        tool_use_id = block.get("tool_use_id")
+                        if isinstance(tool_use_id, str):
+                            next_tool_result_ids.add(tool_use_id)
+
+        missing_tool_result_blocks = []
+        for tool_use_block in tool_uses:
+            tool_use_id = tool_use_block.get("id")
+            if not isinstance(tool_use_id, str) or tool_use_id in next_tool_result_ids:
+                continue
+
+            tool_name = tool_use_block.get("name") or "unknown_tool"
+            missing_tool_result_blocks.append(
+                {
+                    "type": "tool_result",
+                    "tool_use_id": tool_use_id,
+                    "content": f"Tool result for {tool_name} was skipped because the user did not provide one.",
+                }
+            )
+
+        if not missing_tool_result_blocks:
+            message_index += 1
+            continue
+
+        if next_message is None:
+            sanitized_messages.insert(
+                message_index + 1,
+                {
+                    "role": "user",
+                    "content": missing_tool_result_blocks,
+                },
+            )
+            message_index += 2
+            continue
+
+        next_content = next_message.get("content")
+        if isinstance(next_content, list):
+            normalized_next_content = next_content
+        elif isinstance(next_content, str):
+            normalized_next_content = (
+                [{"type": "text", "text": next_content}] if next_content else []
+            )
+        elif next_content is None:
+            normalized_next_content = []
+        else:
+            normalized_next_content = [next_content]
+
+        next_message["content"] = missing_tool_result_blocks + normalized_next_content  # type: ignore
+        message_index += 1
+
+    return sanitized_messages
+
+
 def anthropic_messages_pt(  # noqa: PLR0915
     messages: List[AllMessageValues],
     model: str,

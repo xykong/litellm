@@ -19,6 +19,7 @@ sys.path.insert(
 import litellm
 from litellm.litellm_core_utils.prompt_templates.factory import (
     sanitize_messages_for_tool_calling,
+    sanitize_anthropic_native_messages_for_tool_calling,
     anthropic_messages_pt,
 )
 
@@ -427,6 +428,260 @@ class TestMessageSanitization:
         assert result[0]["content"][0]["text"] == "Hello"
         assert result[1]["content"][0]["text"] == "Hi there"
         assert result[2]["content"][0]["text"] == "How are you?"
+
+
+class TestAnthropicNativeMessageSanitization:
+    """Test sanitization for Anthropic-native format messages (/v1/messages pass-through)"""
+
+    def setup_method(self):
+        self.original_modify_params = litellm.modify_params
+        litellm.modify_params = True
+
+    def teardown_method(self):
+        litellm.modify_params = self.original_modify_params
+
+    def test_orphaned_tool_use_no_following_user_message(self):
+        """
+        Reproduces the exact bug: assistant sends tool_use but conversation ends
+        without a tool_result. A dummy user message with tool_result should be injected.
+        """
+        messages = [
+            {"role": "user", "content": "do something"},
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "text", "text": "OK"},
+                    {
+                        "type": "tool_use",
+                        "id": "toolu_014pWwdiQm6ear25PGFtxsuB",
+                        "name": "some_tool",
+                        "input": {},
+                    },
+                ],
+            },
+        ]
+
+        result = sanitize_anthropic_native_messages_for_tool_calling(messages)
+
+        assert len(result) == 3
+        assert result[0]["role"] == "user"
+        assert result[1]["role"] == "assistant"
+        injected = result[2]
+        assert injected["role"] == "user"
+        content = injected["content"]
+        assert isinstance(content, list)
+        assert len(content) == 1
+        assert content[0]["type"] == "tool_result"
+        assert content[0]["tool_use_id"] == "toolu_014pWwdiQm6ear25PGFtxsuB"
+        assert "some_tool" in content[0]["content"]
+
+    def test_orphaned_tool_use_existing_user_message_gets_dummy_prepended(self):
+        """
+        When the next user message exists but lacks the tool_result,
+        dummy tool_result blocks should be prepended to that user message.
+        """
+        messages = [
+            {"role": "user", "content": "do something"},
+            {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "id": "toolu_abc",
+                        "name": "my_tool",
+                        "input": {"x": 1},
+                    }
+                ],
+            },
+            {"role": "user", "content": [{"type": "text", "text": "I changed my mind"}]},
+        ]
+
+        result = sanitize_anthropic_native_messages_for_tool_calling(messages)
+
+        assert len(result) == 3
+        assert result[2]["role"] == "user"
+        content = result[2]["content"]
+        assert isinstance(content, list)
+        tool_result_blocks = [b for b in content if b.get("type") == "tool_result"]
+        assert len(tool_result_blocks) == 1
+        assert tool_result_blocks[0]["tool_use_id"] == "toolu_abc"
+        text_blocks = [b for b in content if b.get("type") == "text"]
+        assert len(text_blocks) == 1
+
+    def test_complete_tool_use_result_pair_unchanged(self):
+        """
+        When tool_use has a corresponding tool_result in the next message,
+        messages should pass through unmodified.
+        """
+        messages = [
+            {"role": "user", "content": "ping"},
+            {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "id": "toolu_xyz",
+                        "name": "ping_tool",
+                        "input": {},
+                    }
+                ],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "toolu_xyz",
+                        "content": "pong",
+                    }
+                ],
+            },
+        ]
+
+        result = sanitize_anthropic_native_messages_for_tool_calling(messages)
+
+        assert len(result) == 3
+        assert result == messages
+
+    def test_modify_params_false_skips_sanitization(self):
+        litellm.modify_params = False
+
+        messages = [
+            {"role": "user", "content": "do something"},
+            {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "id": "toolu_orphan",
+                        "name": "orphan_tool",
+                        "input": {},
+                    }
+                ],
+            },
+        ]
+
+        result = sanitize_anthropic_native_messages_for_tool_calling(messages)
+
+        assert result == messages
+
+    def test_multiple_tool_use_partial_results(self):
+        """
+        Two tool_use blocks; only one tool_result provided.
+        The missing one should get a dummy injected.
+        """
+        messages = [
+            {"role": "user", "content": "run two tools"},
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "tool_use", "id": "tid_1", "name": "tool_a", "input": {}},
+                    {"type": "tool_use", "id": "tid_2", "name": "tool_b", "input": {}},
+                ],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {"type": "tool_result", "tool_use_id": "tid_1", "content": "result_a"}
+                ],
+            },
+        ]
+
+        result = sanitize_anthropic_native_messages_for_tool_calling(messages)
+
+        assert len(result) == 3
+        user_content = result[2]["content"]
+        tool_result_ids = {b["tool_use_id"] for b in user_content if b.get("type") == "tool_result"}
+        assert "tid_1" in tool_result_ids
+        assert "tid_2" in tool_result_ids
+
+    def test_string_content_in_next_user_message_wrapped(self):
+        """
+        When the next user message has string content (not a list),
+        it should be wrapped into a text block and dummy tool_result prepended.
+        """
+        messages = [
+            {"role": "user", "content": "go"},
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "tool_use", "id": "toolu_str", "name": "t", "input": {}}
+                ],
+            },
+            {"role": "user", "content": "plain text follow-up"},
+        ]
+
+        result = sanitize_anthropic_native_messages_for_tool_calling(messages)
+
+        assert len(result) == 3
+        content = result[2]["content"]
+        assert isinstance(content, list)
+        types = {b.get("type") for b in content}
+        assert "tool_result" in types
+        assert "text" in types
+
+    def test_text_after_tool_use_in_assistant_content_reordered(self):
+        """
+        Reproduces production bug: opencode context compaction merged two assistant
+        turns into one, producing [text, tool_use, text, tool_use] which Anthropic
+        rejects with 'tool_use ids were found without tool_result blocks immediately after'.
+
+        The fix must reorder content so all text blocks precede all tool_use blocks,
+        resulting in [text, text, tool_use, tool_use].
+        """
+        messages = [
+            {"role": "user", "content": [{"type": "text", "text": "do work"}]},
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "text", "text": "Analysis from turn 1."},
+                    {"type": "tool_use", "id": "toolu_014pWwdiQm6ear25PGFtxsuB", "name": "tool_a", "input": {}},
+                    {"type": "text", "text": "Analysis from turn 2."},
+                    {"type": "tool_use", "id": "toolu_011kMYETyKmWK4ZrNCxamm5B", "name": "tool_b", "input": {}},
+                ],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {"type": "tool_result", "tool_use_id": "toolu_014pWwdiQm6ear25PGFtxsuB", "content": "r1"},
+                    {"type": "tool_result", "tool_use_id": "toolu_011kMYETyKmWK4ZrNCxamm5B", "content": "r2"},
+                ],
+            },
+        ]
+
+        result = sanitize_anthropic_native_messages_for_tool_calling(messages)
+
+        assert len(result) == 3
+        content = result[1]["content"]
+        assert isinstance(content, list)
+        types = [b["type"] for b in content]
+        assert types == ["text", "text", "tool_use", "tool_use"]
+        assert content[2]["id"] == "toolu_014pWwdiQm6ear25PGFtxsuB"
+        assert content[3]["id"] == "toolu_011kMYETyKmWK4ZrNCxamm5B"
+
+    def test_valid_text_before_tool_use_unchanged(self):
+        messages = [
+            {"role": "user", "content": [{"type": "text", "text": "do work"}]},
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "text", "text": "I will run two tools."},
+                    {"type": "tool_use", "id": "toolu_aaa", "name": "tool_a", "input": {}},
+                    {"type": "tool_use", "id": "toolu_bbb", "name": "tool_b", "input": {}},
+                ],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {"type": "tool_result", "tool_use_id": "toolu_aaa", "content": "r1"},
+                    {"type": "tool_result", "tool_use_id": "toolu_bbb", "content": "r2"},
+                ],
+            },
+        ]
+
+        result = sanitize_anthropic_native_messages_for_tool_calling(messages)
+
+        assert result == messages
 
 
 if __name__ == "__main__":

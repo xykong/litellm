@@ -21,6 +21,9 @@ from typing import (
 )
 
 import litellm
+from litellm.litellm_core_utils.prompt_templates.factory import (
+    sanitize_anthropic_native_messages_for_tool_calling,
+)
 from litellm.litellm_core_utils.litellm_logging import Logging as LiteLLMLoggingObj
 from litellm.llms.anthropic.common_utils import (
     strip_empty_text_blocks_from_anthropic_messages,
@@ -378,6 +381,8 @@ def anthropic_messages_handler(
     # full-messages scan. Pop it so it never leaks into provider params.
     if not kwargs.pop("_litellm_messages_presanitized", False):
         messages = strip_empty_text_blocks_from_anthropic_messages(messages)
+
+    messages = sanitize_anthropic_native_messages_for_tool_calling(messages)
 
     metadata = validate_anthropic_api_metadata(metadata)
 
