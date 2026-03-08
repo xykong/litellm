@@ -7,6 +7,7 @@ import { MenuFoldOutlined, MenuUnfoldOutlined, MoonOutlined, SunOutlined } from 
 import { Button, Switch, Tag } from "antd";
 import Link from "next/link";
 import React, { useEffect, useState } from "react";
+import LanguageSwitcher from "./LanguageSwitcher";
 import UserDropdown from "./Navbar/UserDropdown/UserDropdown";
 
 interface NavbarProps {
@@ -135,6 +136,7 @@ const Navbar: React.FC<NavbarProps> = ({
                 unCheckedChildren={<SunOutlined />}
               />
             )}
+            <LanguageSwitcher />
             {!isPublicPage && <UserDropdown onLogout={handleLogout} />}
           </div>
         </div>
