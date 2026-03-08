@@ -1,0 +1,48 @@
+{
+  "groupAiGateway": "AI GATEWAY",
+  "groupObservability": "OBSERVABILITY",
+  "groupAccessControl": "ACCESS CONTROL",
+  "groupDeveloperTools": "DEVELOPER TOOLS",
+  "groupSettings": "SETTINGS",
+
+  "virtualKeys": "Virtual Keys",
+  "playground": "Playground",
+  "modelsEndpoints": "Models + Endpoints",
+  "agents": "Agents",
+  "mcpServers": "MCP Servers",
+  "guardrails": "Guardrails",
+  "policies": "Policies",
+  "tools": "Tools",
+  "searchTools": "Search Tools",
+  "vectorStores": "Vector Stores",
+  "toolPolicies": "Tool Policies",
+
+  "usage": "Usage",
+  "logs": "Logs",
+  "guardrailsMonitor": "Guardrails Monitor",
+
+  "teams": "Teams",
+  "projects": "Projects",
+  "internalUsers": "Internal Users",
+  "organizations": "Organizations",
+  "accessGroups": "Access Groups",
+  "budgets": "Budgets",
+
+  "apiReference": "API Reference",
+  "aiHub": "AI Hub",
+  "learningResources": "Learning Resources",
+  "experimental": "Experimental",
+  "caching": "Caching",
+  "prompts": "Prompts",
+  "apiPlayground": "API Playground",
+  "tagManagement": "Tag Management",
+  "claudeCodePlugins": "Claude Code Plugins",
+  "oldUsage": "Old Usage",
+
+  "settings": "Settings",
+  "routerSettings": "Router Settings",
+  "loggingAlerts": "Logging & Alerts",
+  "adminSettings": "Admin Settings",
+  "costTracking": "Cost Tracking",
+  "uiTheme": "UI Theme"
+}

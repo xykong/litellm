@@ -1,0 +1,48 @@
+{
+  "groupAiGateway": "AI 网关",
+  "groupObservability": "可观测性",
+  "groupAccessControl": "访问控制",
+  "groupDeveloperTools": "开发者工具",
+  "groupSettings": "设置",
+
+  "virtualKeys": "虚拟密钥",
+  "playground": "调试台",
+  "modelsEndpoints": "模型与端点",
+  "agents": "智能体",
+  "mcpServers": "MCP 服务器",
+  "guardrails": "内容守护",
+  "policies": "策略",
+  "tools": "工具",
+  "searchTools": "搜索工具",
+  "vectorStores": "向量存储",
+  "toolPolicies": "工具策略",
+
+  "usage": "用量统计",
+  "logs": "日志",
+  "guardrailsMonitor": "守护监控",
+
+  "teams": "团队",
+  "projects": "项目",
+  "internalUsers": "内部用户",
+  "organizations": "组织",
+  "accessGroups": "访问分组",
+  "budgets": "预算",
+
+  "apiReference": "API 参考",
+  "aiHub": "AI 中心",
+  "learningResources": "学习资源",
+  "experimental": "实验性功能",
+  "caching": "缓存",
+  "prompts": "提示词",
+  "apiPlayground": "API 调试台",
+  "tagManagement": "标签管理",
+  "claudeCodePlugins": "Claude Code 插件",
+  "oldUsage": "旧版用量",
+
+  "settings": "设置",
+  "routerSettings": "路由设置",
+  "loggingAlerts": "日志与告警",
+  "adminSettings": "管理员设置",
+  "costTracking": "费用追踪",
+  "uiTheme": "界面主题"
+}
