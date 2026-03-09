@@ -14,8 +14,20 @@ vi.mock("@/app/(dashboard)/hooks/useDisableBouncingIcon", () => ({
   useDisableBouncingIcon: () => false,
 }));
 
+vi.mock("@/app/(dashboard)/hooks/uiConfig/useUIConfig", () => ({
+  useUIConfig: () => ({ data: { server_root_path: "" } }),
+}));
+
 vi.mock("./Navbar/BlogDropdown/BlogDropdown", () => ({
   BlogDropdown: () => <div data-testid="blog-dropdown">Blog</div>,
+}));
+
+vi.mock("./Navbar/NotificationsBell/NotificationsBell", () => ({
+  NotificationsBell: () => (
+    <button type="button" aria-label="Notifications">
+      Notifications
+    </button>
+  ),
 }));
 
 const mockUserDropdownData = vi.hoisted(() => ({
@@ -133,8 +145,8 @@ describe("Navbar", () => {
   it("should render without crashing", () => {
     renderWithProviders(<Navbar {...defaultProps} />);
 
+    expect(screen.getByText("Chat")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^notifications$/i })).toBeInTheDocument();
-    expect(screen.getByText("Docs")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /open account menu/i })).toBeInTheDocument();
   });
 

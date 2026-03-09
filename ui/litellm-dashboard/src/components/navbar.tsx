@@ -1,22 +1,16 @@
 import { useHealthReadinessDetails } from "@/app/(dashboard)/hooks/healthReadiness/useHealthReadinessDetails";
 import { useDisableBouncingIcon } from "@/app/(dashboard)/hooks/useDisableBouncingIcon";
-import { useDisableShowPrompts } from "@/app/(dashboard)/hooks/useDisableShowPrompts";
-import { useWorker } from "@/hooks/useWorker";
 import { getProxyBaseUrl } from "@/components/networking";
+import { useUIConfig } from "@/app/(dashboard)/hooks/uiConfig/useUIConfig";
 import { useTheme } from "@/contexts/ThemeContext";
 import { clearTokenCookies } from "@/utils/cookieUtils";
-import { clearStoredReturnUrl } from "@/utils/returnUrlUtils";
 import { fetchProxySettings } from "@/utils/proxyUtils";
-import { DownOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from "@ant-design/icons";
+import { MenuFoldOutlined, MenuUnfoldOutlined, MessageOutlined } from "@ant-design/icons";
 import { Tag } from "antd";
 import Link from "next/link";
 import React, { useEffect, useState } from "react";
-import { BlogDropdown } from "./Navbar/BlogDropdown/BlogDropdown";
-import { CommunityEngagementButtons } from "./Navbar/CommunityEngagementButtons/CommunityEngagementButtons";
-import { NAV_PRODUCT_LINK_CLASS } from "./Navbar/navProductLinkClass";
 import { NotificationsBell } from "./Navbar/NotificationsBell/NotificationsBell";
 import UserDropdown from "./Navbar/UserDropdown/UserDropdown";
-import WorkerDropdown from "./Navbar/WorkerDropdown/WorkerDropdown";
 
 interface NavbarProps {
   proxySettings: any;
@@ -37,13 +31,15 @@ const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const baseUrl = getProxyBaseUrl();
   const [logoutUrl, setLogoutUrl] = useState("");
+  const { data: uiConfig } = useUIConfig();
+  const uiRoot = uiConfig?.server_root_path && uiConfig.server_root_path !== "/"
+    ? uiConfig.server_root_path.replace(/\/+$/, "")
+    : "";
+  const chatHref = `${uiRoot}/ui/chat`;
   const { logoUrl } = useTheme();
   const { data: healthData } = useHealthReadinessDetails(accessToken);
   const version = healthData?.litellm_version;
   const disableBouncingIcon = useDisableBouncingIcon();
-  const hideCommunityLinks = useDisableShowPrompts();
-  const { isControlPlane, selectedWorker } = useWorker();
-  const showWorkerSwitch = isControlPlane && selectedWorker !== null;
 
   const imageUrl = logoUrl || `${baseUrl}/get_image`;
 
@@ -59,7 +55,7 @@ const Navbar: React.FC<NavbarProps> = ({
     };
 
     initializeProxySettings();
-  }, [accessToken]);
+  }, [accessToken, setProxySettings]);
 
   useEffect(() => {
     setLogoutUrl(proxySettings?.PROXY_LOGOUT_URL || "");
@@ -67,17 +63,7 @@ const Navbar: React.FC<NavbarProps> = ({
 
   const handleLogout = () => {
     clearTokenCookies();
-    localStorage.removeItem("litellm_selected_worker_id");
-    localStorage.removeItem("litellm_worker_url");
     window.location.href = logoutUrl;
-  };
-
-  const handleWorkerSwitch = (workerId: string) => {
-    clearTokenCookies();
-    clearStoredReturnUrl();
-    localStorage.removeItem("litellm_selected_worker_id");
-    localStorage.removeItem("litellm_worker_url");
-    window.location.href = `/ui/login?worker=${encodeURIComponent(workerId)}`;
   };
 
   return (
@@ -87,6 +73,7 @@ const Navbar: React.FC<NavbarProps> = ({
           <div className="flex flex-shrink-0 items-center">
             {onToggleSidebar && (
               <button
+                type="button"
                 onClick={onToggleSidebar}
                 className="mr-2 flex h-9 w-9 items-center justify-center rounded-md text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
                 title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
@@ -132,43 +119,48 @@ const Navbar: React.FC<NavbarProps> = ({
               )}
             </div>
           </div>
-          <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-4">
-            {showWorkerSwitch && (
-              <div className="flex shrink-0 items-center">
-                <WorkerDropdown onWorkerSwitch={handleWorkerSwitch} />
-              </div>
-            )}
-
-            <nav
-              aria-label="Product documentation"
-              className={`flex min-w-0 items-center gap-2 ${showWorkerSwitch ? "border-l border-gray-200 pl-4" : ""}`}
+          <div className="ml-auto flex items-center space-x-5">
+            {/* Chat CTA — always visible, opens in new tab */}
+            <a
+              href={chatHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "6px 14px",
+                borderRadius: 8,
+                background: "#1677ff",
+                color: "#fff",
+                fontSize: 13,
+                fontWeight: 600,
+                textDecoration: "none",
+                whiteSpace: "nowrap",
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = "#0958d9"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.background = "#1677ff"; }}
             >
-              <a
-                href="https://docs.litellm.ai/docs/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className={NAV_PRODUCT_LINK_CLASS}
-              >
-                Docs
-                {/* Layout parity with Blog chevron — intentional single-level link */}
-                <DownOutlined className="pointer-events-none text-[10px] opacity-0" aria-hidden />
-              </a>
-              <BlogDropdown />
-            </nav>
-
-            {!hideCommunityLinks && (
-              <div className="flex shrink-0 items-center border-l border-gray-200 pl-4">
-                <CommunityEngagementButtons />
-              </div>
-            )}
+              <MessageOutlined style={{ fontSize: 14 }} />
+              Chat
+              <span style={{
+                fontSize: 9,
+                fontWeight: 700,
+                background: "#fff",
+                color: "#1677ff",
+                borderRadius: 3,
+                padding: "1px 4px",
+                letterSpacing: "0.05em",
+              }}>
+                NEW
+              </span>
+            </a>
 
             {!isPublicPage && (
-              <div className="flex shrink-0 items-center border-l border-gray-200 pl-4">
-                <div className="flex items-center gap-0.5 rounded-lg bg-gray-50 px-1 py-0 transition-colors hover:bg-gray-100">
-                  <NotificationsBell />
-                  <span className="mx-0.5 h-6 w-px shrink-0 bg-gray-200" aria-hidden />
-                  <UserDropdown onLogout={handleLogout} />
-                </div>
+              <div className="flex items-center gap-0.5 rounded-lg bg-gray-50 px-1 py-0 transition-colors hover:bg-gray-100">
+                <NotificationsBell />
+                <span className="mx-0.5 h-6 w-px shrink-0 bg-gray-200" aria-hidden />
+                <UserDropdown onLogout={handleLogout} />
               </div>
             )}
           </div>
