@@ -1580,7 +1580,10 @@ class OpenTelemetry(OTELGenAISemconvMixin, CustomLogger):
                 attrs["id"] = msg["id"]
             capture_event_content = self._capture_in_event()
             if capture_event_content and msg.get("content"):
-                attrs["gen_ai.prompt"] = msg["content"]
+                content = msg["content"]
+                if not isinstance(content, str):
+                    content = safe_dumps(content)
+                attrs["gen_ai.prompt"] = content
 
             body = msg.copy()
             if not capture_event_content:
