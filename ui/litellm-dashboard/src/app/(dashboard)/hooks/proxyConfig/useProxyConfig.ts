@@ -2,6 +2,7 @@ import { useQuery, useMutation, UseMutationResult, useQueryClient } from "@tanst
 import { createQueryKeys } from "../common/queryKeysFactory";
 import useAuthorized from "../useAuthorized";
 import { proxyBaseUrl, getGlobalLitellmHeaderName, deriveErrorMessage, handleError } from "@/components/networking";
+import { isProxyAdminRole } from "@/utils/roles";
 
 /**
  * Enum for config types that can be fetched from the proxy config endpoint.
@@ -146,7 +147,7 @@ export const deleteProxyConfigFieldCall = async (
  * @returns React Query result with the config list data
  */
 export const useProxyConfig = (configType: ConfigType) => {
-  const { accessToken } = useAuthorized();
+  const { accessToken, userRole } = useAuthorized();
   return useQuery<ProxyConfigResponse>({
     queryKey: proxyConfigKeys.list({
       filters: {
@@ -154,7 +155,7 @@ export const useProxyConfig = (configType: ConfigType) => {
       },
     }),
     queryFn: async () => await getProxyConfigCall(accessToken!, configType),
-    enabled: Boolean(accessToken),
+    enabled: Boolean(accessToken) && isProxyAdminRole(userRole ?? ""),
   });
 };
 
