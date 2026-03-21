@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, patch, AsyncMock
 
 
 import httpx
-from litellm.proxy.utils import update_spend, DB_CONNECTION_ERROR_TYPES
+from litellm.proxy.utils import update_spend, DB_CONNECTION_ERROR_TYPES, jsonify_object
 
 
 class MockPrismaClient:
@@ -35,7 +35,7 @@ class MockPrismaClient:
         self._spend_log_transactions_lock = asyncio.Lock()
 
     def jsonify_object(self, obj):
-        return obj
+        return jsonify_object(obj)
 
     def add_spend_log_transaction_to_daily_user_transaction(self, payload):
         # Mock implementation
@@ -312,3 +312,36 @@ async def test_update_spend_logs_multiple_batches_with_failure():
 
     # Verify all logs were cleared from transactions
     assert len(prisma_client.spend_log_transactions) == 0
+
+
+@pytest.mark.asyncio
+async def test_update_spend_logs_strips_null_bytes_before_create_many():
+    prisma_client = MockPrismaClient()
+    proxy_logging_obj = create_mock_proxy_logging()
+
+    prisma_client.spend_log_transactions = [
+        {
+            "request_id": "req-1\x00",
+            "spend": 10,
+            "metadata": {"note": "bad\x00value"},
+            "response": "answer\x00text",
+            "proxy_server_request": {"body": {"input": "hi\x00there"}},
+        }
+    ]
+
+    create_many_mock = AsyncMock(return_value=None)
+    prisma_client.db.litellm_spendlogs.create_many = create_many_mock
+
+    await update_spend(prisma_client, None, proxy_logging_obj)
+
+    create_many_mock.assert_awaited_once()
+    written_batch = create_many_mock.call_args.kwargs["data"]
+    assert written_batch == [
+        {
+            "request_id": "req-1",
+            "spend": 10,
+            "metadata": '{"note": "badvalue"}',
+            "response": "answertext",
+            "proxy_server_request": '{"body": {"input": "hithere"}}',
+        }
+    ]

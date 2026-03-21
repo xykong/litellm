@@ -51,6 +51,20 @@ def test_sanitize_request_body_for_spend_logs_payload_basic():
     assert _sanitize_request_body_for_spend_logs_payload(request_body) == request_body
 
 
+def test_sanitize_request_body_for_spend_logs_payload_strips_null_bytes():
+    request_body = {
+        "messages": [{"role": "user", "content": "Hello\x00, world"}],
+        "metadata": {"note": "abc\x00def"},
+    }
+
+    sanitized = _sanitize_request_body_for_spend_logs_payload(request_body)
+
+    assert sanitized == {
+        "messages": [{"role": "user", "content": "Hello, world"}],
+        "metadata": {"note": "abcdef"},
+    }
+
+
 def test_sanitize_request_body_for_spend_logs_payload_long_string():
     from litellm.constants import MAX_STRING_LENGTH_PROMPT_IN_DB
 
@@ -298,6 +312,25 @@ def test_get_messages_for_spend_logs_realtime_returns_messages(mock_should_store
     assert parsed[0]["content"] == "You are a helpful assistant."
     assert parsed[1]["role"] == "user"
     assert parsed[1]["content"] == "What is the weather today?"
+
+
+@patch(
+    "litellm.proxy.spend_tracking.spend_tracking_utils._should_store_prompts_and_responses_in_spend_logs"
+)
+def test_get_messages_for_spend_logs_realtime_strips_null_bytes(mock_should_store):
+    mock_should_store.return_value = True
+    payload = cast(
+        StandardLoggingPayload,
+        {
+            "call_type": "_arealtime",
+            "messages": [{"role": "user", "content": "Hello\x00 there"}],
+        },
+    )
+
+    result = _get_messages_for_spend_logs_payload(payload)
+    parsed = json.loads(result)
+
+    assert parsed == [{"role": "user", "content": "Hello there"}]
 
 
 @patch(

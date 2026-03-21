@@ -8,7 +8,7 @@ sys.path.insert(
     0, os.path.abspath("../../..")
 )  # Adds the parent directory to the system path
 
-from litellm.litellm_core_utils.safe_json_dumps import safe_dumps
+from litellm.litellm_core_utils.safe_json_dumps import safe_dumps, strip_null_bytes
 
 
 def test_primitive_types():
@@ -172,3 +172,35 @@ def test_pydantic_base_model():
     assert len(result["healthy_endpoints"]) == 2
     assert result["healthy_endpoints"][0]["name"] == "test"
     assert result["healthy_endpoints"][1] == {"value": 1, "label": "one"}
+
+
+def test_strip_null_bytes_recursive():
+    data = {
+        "text": "ab\x00cd",
+        "items": ["x\x00y", {"nested": "z\x00q"}],
+        "tuple": ("1\x002",),
+    }
+
+    result = strip_null_bytes(data)
+
+    assert result == {
+        "text": "abcd",
+        "items": ["xy", {"nested": "zq"}],
+        "tuple": ("12",),
+    }
+
+
+def test_safe_dumps_strips_null_bytes_from_nested_strings():
+    data = {
+        "message": "hello\x00world",
+        "nested": {"content": "a\x00b"},
+        "items": ["c\x00d"],
+    }
+
+    result = json.loads(safe_dumps(data))
+
+    assert result == {
+        "message": "helloworld",
+        "nested": {"content": "ab"},
+        "items": ["cd"],
+    }

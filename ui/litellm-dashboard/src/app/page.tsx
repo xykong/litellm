@@ -30,7 +30,7 @@ import PromptsPanel from "@/components/prompts";
 import PublicModelHub from "@/components/public_model_hub";
 import { SearchTools } from "@/components/SearchTools";
 import Settings from "@/components/settings";
-import { ClaudeCodePrompt, ClaudeCodeModal } from "@/components/survey";
+import { ClaudeCodePrompt, ClaudeCodeModal, SurveyPrompt, SurveyModal } from "@/components/survey";
 import TagManagement from "@/components/tag_management";
 import TransformRequestPanel from "@/components/transform_request";
 import UIThemeSettings from "@/components/ui_theme_settings";
@@ -94,6 +94,13 @@ function CreateKeyPageContent() {
   const [createClicked, setCreateClicked] = useState<boolean>(false);
 
 
+
+  const [showSurveyPrompt, setShowSurveyPrompt] = useState(false);
+  const [showSurveyModal, setShowSurveyModal] = useState(false);
+  const handleOpenSurvey = () => { setShowSurveyPrompt(false); setShowSurveyModal(true); };
+  const handleDismissSurveyPrompt = () => setShowSurveyPrompt(false);
+  const handleSurveyModalClose = () => setShowSurveyModal(false);
+  const handleSurveyComplete = () => setShowSurveyModal(false);
 
   // Claude Code feedback state
   const [isClaudeCode, setIsClaudeCode] = useState(false);

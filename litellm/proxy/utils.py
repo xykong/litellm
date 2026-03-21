@@ -87,6 +87,7 @@ from litellm import (
 )
 from litellm._logging import _redact_string, verbose_proxy_logger
 from litellm._service_logger import ServiceLogging, ServiceTypes
+from litellm.litellm_core_utils.safe_json_dumps import safe_dumps, strip_null_bytes
 from litellm.caching.caching import DualCache, RedisCache
 from litellm.caching.dual_cache import LimitedSizeOrderedDict
 from litellm.exceptions import RejectedRequestError
@@ -2626,10 +2627,12 @@ def jsonify_object(data: dict) -> dict:
     for k, v in db_data.items():
         if isinstance(v, dict):
             try:
-                db_data[k] = json.dumps(v)
+                db_data[k] = safe_dumps(v)
             except Exception:
                 # This avoids Prisma retrying this 5 times, and making 5 clients
                 db_data[k] = "failed-to-serialize-json"
+        elif isinstance(v, str):
+            db_data[k] = strip_null_bytes(v)
     return db_data
 
 
@@ -2986,10 +2989,12 @@ class PrismaClient:
         for k, v in db_data.items():
             if isinstance(v, dict):
                 try:
-                    db_data[k] = json.dumps(v)
+                    db_data[k] = safe_dumps(v)
                 except Exception:
                     # This avoids Prisma retrying this 5 times, and making 5 clients
                     db_data[k] = "failed-to-serialize-json"
+            elif isinstance(v, str):
+                db_data[k] = strip_null_bytes(v)
         return db_data
 
     @backoff.on_exception(
