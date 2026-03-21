@@ -198,6 +198,46 @@ function LoginPageContent() {
             />
           )}
 
+          <Button
+            type="primary"
+            block
+            size="large"
+            onClick={() => {
+              window.location.href = `${getProxyBaseUrl()}/sso/happyelements/login`;
+            }}
+            className="h-12 rounded-lg font-medium focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200 cursor-pointer"
+            style={{ minHeight: "44px" }}
+            aria-label="Sign in with HappyElements SSO"
+          >
+            <span className="flex items-center justify-center">
+              <svg
+                className="w-5 h-5 mr-2"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                xmlns="http://www.w3.org/2000/svg"
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                />
+              </svg>
+              Sign in with HappyElements SSO
+            </span>
+          </Button>
+
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-200"></div>
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-4 bg-white text-gray-500">or</span>
+            </div>
+          </div>
+
           <Form onFinish={handleSubmit} layout="vertical" requiredMark={false}>
             {uiConfig?.is_control_plane && workers.length > 0 && (
               <Form.Item label="Worker" style={{ marginBottom: 16 }}>
@@ -251,59 +291,19 @@ function LoginPageContent() {
 
             <Form.Item className="mb-0">
               <Button
-                type="primary"
+                type="default"
                 htmlType="submit"
                 loading={isLoginLoading}
                 disabled={isLoginLoading}
                 block
                 size="large"
-                className="h-12 rounded-lg font-medium bg-blue-600 hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200"
+                className="h-12 rounded-lg font-medium border-gray-300 hover:border-gray-400 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200"
                 style={{ minHeight: "44px" }}
               >
                 {isLoginLoading ? "Signing in..." : "Sign in"}
               </Button>
             </Form.Item>
           </Form>
-
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-200"></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-white text-gray-500">or</span>
-            </div>
-          </div>
-
-          <Button
-            type="default"
-            block
-            size="large"
-            onClick={() => {
-              window.location.href = `${getProxyBaseUrl()}/sso/happyelements/login`;
-            }}
-            className="h-12 rounded-lg font-medium border-gray-300 hover:border-gray-400 hover:bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200 cursor-pointer"
-            style={{ minHeight: "44px" }}
-            aria-label="Sign in with HappyElements SSO"
-          >
-            <span className="flex items-center justify-center">
-              <svg
-                className="w-5 h-5 mr-2"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                xmlns="http://www.w3.org/2000/svg"
-                aria-hidden="true"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                />
-              </svg>
-              Sign in with HappyElements SSO
-            </span>
-          </Button>
         </div>
       </div>
     </div>
