@@ -1577,7 +1577,7 @@ class OpenTelemetry(OTELGenAISemconvMixin, CustomLogger):
                 "gen_ai.system": provider,
             }
             if role == "tool" and msg.get("id"):
-                attrs["id"] = msg["id"]
+                attrs["id"] = str(msg["id"])
             capture_event_content = self._capture_in_event()
             if capture_event_content and msg.get("content"):
                 content = msg["content"]
@@ -1612,7 +1612,10 @@ class OpenTelemetry(OTELGenAISemconvMixin, CustomLogger):
             body_msg = choice.get("message", {})
             capture_event_content = self._capture_in_event()
             if capture_event_content and body_msg.get("content"):
-                attrs["message.content"] = body_msg["content"]
+                msg_content = body_msg["content"]
+                if not isinstance(msg_content, str):
+                    msg_content = safe_dumps(msg_content)
+                attrs["message.content"] = msg_content
             body = {
                 "index": idx,
                 "finish_reason": choice.get("finish_reason"),
@@ -2129,7 +2132,7 @@ class OpenTelemetry(OTELGenAISemconvMixin, CustomLogger):
             )
 
             # The Generative AI Provider: Azure, OpenAI, etc.
-            provider_name = litellm_params.get("custom_llm_provider", "Unknown")
+            provider_name = litellm_params.get("custom_llm_provider") or "Unknown"
             # Latest-experimental semconv replaced gen_ai.system with
             # gen_ai.provider.name; emit only the conformant key in that mode.
             if self._gen_ai_semconv_latest_experimental:
