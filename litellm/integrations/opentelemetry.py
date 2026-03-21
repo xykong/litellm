@@ -749,8 +749,9 @@ class OpenTelemetry(OTELGenAISemconvMixin, CustomLogger):
                 parent_span=parent_otel_span,
             )
 
-            # End Parent OTEL Sspan
-            parent_otel_span.end(end_time=self._to_ns(datetime.now()))
+            # End Parent OTEL Span
+            if parent_otel_span.is_recording():
+                parent_otel_span.end(end_time=self._to_ns(datetime.now()))
 
     def _emit_guardrail_spans_from_request_data(
         self,
@@ -1081,7 +1082,7 @@ class OpenTelemetry(OTELGenAISemconvMixin, CustomLogger):
         # 6. End the primary span now that all child operations are complete.
         # Ending after children prevents "Setting attribute on ended span" warnings
         # from OTEL SDK when child spans reference this span as their parent.
-        if span is not None:
+        if span is not None and span.is_recording():
             span.end(end_time=self._to_ns(end_time))
 
         # 7. Do NOT end parent span - it should be managed by its creator
@@ -1857,7 +1858,7 @@ class OpenTelemetry(OTELGenAISemconvMixin, CustomLogger):
         self._create_guardrail_span(kwargs=kwargs, context=guardrail_ctx)
 
         # End the primary span after all child operations are complete.
-        if span is not None:
+        if span is not None and span.is_recording():
             span.end(end_time=self._to_ns(end_time))
 
         # Do NOT end parent span - it should be managed by its creator
@@ -1867,6 +1868,7 @@ class OpenTelemetry(OTELGenAISemconvMixin, CustomLogger):
             parent_otel_span is not None
             and hasattr(parent_otel_span, "name")
             and parent_otel_span.name == LITELLM_PROXY_REQUEST_SPAN_NAME
+            and parent_otel_span.is_recording()
         ):
             parent_otel_span.end(end_time=self._to_ns(end_time))
 
