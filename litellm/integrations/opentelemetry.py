@@ -1054,9 +1054,7 @@ class OpenTelemetry(OTELGenAISemconvMixin, CustomLogger):
             from opentelemetry.trace import Status, StatusCode
 
             span = None
-            # Only set attributes if the span is still recording (not closed)
-            # Note: parent_span is guaranteed to be not None here
-            if hasattr(parent_span, "set_status"):
+            if hasattr(parent_span, "is_recording") and parent_span.is_recording():
                 parent_span.set_status(Status(StatusCode.OK))
                 self.set_attributes(parent_span, kwargs, response_obj)
             # Raw-request as direct child of parent_span
@@ -2046,6 +2044,8 @@ class OpenTelemetry(OTELGenAISemconvMixin, CustomLogger):
     def set_attributes(  # noqa: PLR0915
         self, span: Span, kwargs, response_obj: Optional[Any]
     ):
+        if not span.is_recording():
+            return
         try:
             if self.callback_name == "langtrace":
                 from litellm.integrations.langtrace import LangtraceAttributes
@@ -2451,6 +2451,8 @@ class OpenTelemetry(OTELGenAISemconvMixin, CustomLogger):
         """
         Safely sets an attribute on the span, ensuring the value is a primitive type.
         """
+        if not span.is_recording():
+            return
         primitive_value = self._cast_as_primitive_value_type(value)
         span.set_attribute(key, primitive_value)
 
