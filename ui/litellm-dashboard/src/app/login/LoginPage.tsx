@@ -171,22 +171,22 @@ function LoginPageContent() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 sm:px-6 lg:px-8">
       <div className="w-full max-w-md">
-        <div className="flex flex-col items-center mb-8">
-          <div className="relative w-20 h-20 mb-6">
-            <Image
-              src="/assets/logos/animal_gateway_logo.jpg"
-              alt="Animal Gateway Logo"
-              fill
-              className="object-contain rounded-xl"
-              priority
-              unoptimized
-            />
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-7 sm:p-8">
+          <div className="flex flex-col items-center mb-6 pt-2">
+            <div className="relative w-14 h-14 mb-3">
+              <Image
+                src="/assets/logos/animal_gateway_logo.jpg"
+                alt="Animal Gateway Logo"
+                fill
+                className="object-contain rounded-xl"
+                priority
+                unoptimized
+              />
+            </div>
+            <h1 className="text-xl font-semibold text-gray-900 tracking-tight">Animal Gateway</h1>
+            <p className="mt-1 text-xs text-gray-500 text-center">Sign in to access your admin dashboard</p>
           </div>
-          <h1 className="text-3xl font-semibold text-gray-900 tracking-tight">Animal Gateway</h1>
-          <p className="mt-2 text-sm text-gray-600">Sign in to access your admin dashboard</p>
-        </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
           {error && (
             <Alert
               message="Login Failed"
@@ -234,7 +234,7 @@ function LoginPageContent() {
               <div className="w-full border-t border-gray-200"></div>
             </div>
             <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-white text-gray-500">or</span>
+              <span className="px-4 bg-white text-gray-500">or sign in with credentials</span>
             </div>
           </div>
 
