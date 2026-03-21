@@ -1035,11 +1035,13 @@ class OpenTelemetry(OTELGenAISemconvMixin, CustomLogger):
         )
 
         if should_create_primary_span:
-            # Create a new litellm_request span
+            # Create a new litellm_request span (NOT ended yet — must end after all
+            # child operations so OTEL SDK does not warn "Setting attribute on ended span")
             span = self._start_primary_span(
                 kwargs, response_obj, start_time, end_time, ctx
             )
-            # Raw-request sub-span (if enabled) - child of litellm_request span
+            # Raw-request sub-span (if enabled) - child of litellm_request span.
+            # Must run before span.end() so the parent is still open.
             self._maybe_log_raw_request(
                 kwargs, response_obj, start_time, end_time, span
             )
@@ -1078,7 +1080,13 @@ class OpenTelemetry(OTELGenAISemconvMixin, CustomLogger):
             if log_span is not None:
                 self._emit_semantic_logs(kwargs, response_obj, log_span)
 
-        # 6. Do NOT end parent span - it should be managed by its creator
+        # 6. End the primary span now that all child operations are complete.
+        # Ending after children prevents "Setting attribute on ended span" warnings
+        # from OTEL SDK when child spans reference this span as their parent.
+        if span is not None:
+            span.end(end_time=self._to_ns(end_time))
+
+        # 7. Do NOT end parent span - it should be managed by its creator
         # External spans (from Langfuse, user code, HTTP headers, global context) must not be closed by LiteLLM
         # However, proxy-created spans should be closed here.
         if (
@@ -1122,7 +1130,6 @@ class OpenTelemetry(OTELGenAISemconvMixin, CustomLogger):
 
         span.set_status(Status(StatusCode.OK))
         self.set_attributes(span, kwargs, response_obj)
-        span.end(end_time=self._to_ns(end_time))
         return span
 
     def _maybe_log_raw_request(
@@ -1822,7 +1829,6 @@ class OpenTelemetry(OTELGenAISemconvMixin, CustomLogger):
 
         span = None
         if should_create_primary_span:
-            # Span 1: Request sent to litellm SDK
             otel_tracer: Tracer = self.get_tracer_to_use_for_request(kwargs)
             span_kwargs: Dict[str, Any] = {
                 "name": self._get_span_name(kwargs),
@@ -1834,11 +1840,7 @@ class OpenTelemetry(OTELGenAISemconvMixin, CustomLogger):
             span = otel_tracer.start_span(**span_kwargs)
             span.set_status(Status(StatusCode.ERROR))
             self.set_attributes(span, kwargs, response_obj)
-
-            # Record exception information using OTEL standard method
             self._record_exception_on_span(span=span, kwargs=kwargs)
-
-            span.end(end_time=self._to_ns(end_time))
         else:
             # When parent span exists and USE_OTEL_LITELLM_REQUEST_SPAN=false,
             # record error on parent span (keeps hierarchy shallow)
@@ -1849,11 +1851,16 @@ class OpenTelemetry(OTELGenAISemconvMixin, CustomLogger):
                 self.set_attributes(parent_otel_span, kwargs, response_obj)
                 self._record_exception_on_span(span=parent_otel_span, kwargs=kwargs)
 
-        # Create span for guardrail information — ensure proper parenting (Issue #5)
+        # Create span for guardrail information — ensure proper parenting (Issue #5).
+        # Must run before span.end() so the parent span is still open.
         guardrail_ctx = self._resolve_guardrail_context(
             span=span, parent_span=parent_otel_span, fallback_ctx=_parent_context
         )
         self._create_guardrail_span(kwargs=kwargs, context=guardrail_ctx)
+
+        # End the primary span after all child operations are complete.
+        if span is not None:
+            span.end(end_time=self._to_ns(end_time))
 
         # Do NOT end parent span - it should be managed by its creator
         # External spans (from Langfuse, user code, HTTP headers, global context) must not be closed by LiteLLM
