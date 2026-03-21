@@ -1281,7 +1281,7 @@ class OpenTelemetry(OTELGenAISemconvMixin, CustomLogger):
     def _record_metrics(self, kwargs, response_obj, start_time, end_time):
         duration_s = (end_time - start_time).total_seconds()
         params = kwargs.get("litellm_params") or {}
-        provider = params.get("custom_llm_provider", "Unknown")
+        provider = params.get("custom_llm_provider") or "Unknown"
 
         common_attrs = {
             "gen_ai.operation.name": (
@@ -1290,7 +1290,7 @@ class OpenTelemetry(OTELGenAISemconvMixin, CustomLogger):
                 else "chat"
             ),
             "gen_ai.system": provider,
-            "gen_ai.request.model": kwargs.get("model"),
+            "gen_ai.request.model": kwargs.get("model") or "",
             "gen_ai.framework": "litellm",
         }
 
@@ -1556,8 +1556,8 @@ class OpenTelemetry(OTELGenAISemconvMixin, CustomLogger):
 
         parent_ctx = span.get_span_context()
         provider = (kwargs.get("litellm_params") or {}).get(
-            "custom_llm_provider", "Unknown"
-        )
+            "custom_llm_provider"
+        ) or "Unknown"
 
         if self._gen_ai_semconv_latest_experimental:
             self._emit_inference_details_event(
@@ -1607,7 +1607,7 @@ class OpenTelemetry(OTELGenAISemconvMixin, CustomLogger):
                 "event_name": "gen_ai.content.completion",
                 "gen_ai.system": provider,
                 "index": idx,
-                "finish_reason": choice.get("finish_reason"),
+                "finish_reason": choice.get("finish_reason") or "",
             }
             body_msg = choice.get("message", {})
             capture_event_content = self._capture_in_event()
