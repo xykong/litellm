@@ -1355,6 +1355,10 @@ async def cli_poll_key(key_id: str, team_id: Optional[str] = None):
                     "status": "ready",
                     "key": pre_resolved_key,
                     "user_id": pre_resolved_user_id,
+                    "team_id": session_data.get("team_id"),
+                    "team_alias": session_data.get("team_alias"),
+                    "teams": session_data.get("teams", []),
+                    "team_details": session_data.get("team_details", []),
                 }
 
             user_teams = session_data.get("teams", [])

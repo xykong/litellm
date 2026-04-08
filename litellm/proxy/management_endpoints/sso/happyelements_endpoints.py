@@ -157,7 +157,11 @@ def get_client_ip(request: Request) -> str:
     description="Initiates HappyElements SSO authentication by redirecting to HappyElements login page",
     include_in_schema=True,
 )
-async def happyelements_login(request: Request, key: Optional[str] = None):
+async def happyelements_login(
+    request: Request,
+    key: Optional[str] = None,
+    preferred_team_id: Optional[str] = None,
+):
     """
     Initiate HappyElements SSO login.
 
@@ -166,12 +170,15 @@ async def happyelements_login(request: Request, key: Optional[str] = None):
 
     Query Parameters:
         key: Optional CLI session key (sk-...). When provided, the callback will
-             route through the CLI SSO flow (no virtual key created in DB).
+             route through the CLI SSO flow (virtual key created/reused in DB).
+        preferred_team_id: Optional team ID to use for the CLI virtual key.
 
     Returns:
         RedirectResponse to HappyElements SSO login page
     """
-    verbose_proxy_logger.info(f"HappyElements SSO login initiated, cli_key={key}")
+    verbose_proxy_logger.info(
+        f"HappyElements SSO login initiated, cli_key={key}, preferred_team_id={preferred_team_id}"
+    )
 
     sso_client = get_happyelements_sso_client()
     client_ip = get_client_ip(request)
@@ -180,6 +187,8 @@ async def happyelements_login(request: Request, key: Optional[str] = None):
     if key and key.startswith("sk-"):
         base_callback = sso_client.callback_url.rstrip("/")
         callback_url = f"{base_callback}?cli_key={key}"
+        if preferred_team_id:
+            callback_url += f"&preferred_team_id={preferred_team_id}"
         verbose_proxy_logger.info(f"CLI SSO login: embedding key in callback URL, key={key}")
 
     login_url = sso_client.generate_login_url(client_ip=client_ip, callback_url_override=callback_url)
@@ -193,6 +202,7 @@ async def _get_or_create_cli_virtual_key(
     user_email: Optional[str],
     user_data: object,
     prisma_client: object,
+    preferred_team_id: Optional[str] = None,
 ) -> str:
     from litellm.proxy.management_endpoints.key_management_endpoints import (
         generate_key_helper_fn,
@@ -202,7 +212,11 @@ async def _get_or_create_cli_virtual_key(
     cli_key_alias = f"cli-sso-{user_id}"
     user_role = getattr(user_data, "user_role", None) or LitellmUserRoles.INTERNAL_USER
     teams = getattr(user_data, "teams", None) or []
-    team_id = teams[0] if teams else None
+
+    if preferred_team_id and preferred_team_id in teams:
+        team_id = preferred_team_id
+    else:
+        team_id = teams[0] if teams else None
 
     existing_key_row = await prisma_client.db.litellm_verificationtoken.find_first(where={"key_alias": cli_key_alias})
 
@@ -228,7 +242,9 @@ async def _get_or_create_cli_virtual_key(
     )
 
     virtual_key: str = key_response["token"]
-    verbose_proxy_logger.info(f"[HappyElements SSO] CLI virtual key ready for user={user_id}, alias={cli_key_alias}")
+    verbose_proxy_logger.info(
+        f"[HappyElements SSO] CLI virtual key ready for user={user_id}, alias={cli_key_alias}, team={team_id}"
+    )
     return virtual_key
 
 
@@ -425,26 +441,56 @@ async def happyelements_callback(
         )
 
         if cli_key and cli_key.startswith("sk-"):
+            teams = getattr(user_data, "teams", None) or []
+            preferred_team_id: Optional[str] = request.query_params.get("preferred_team_id")
+
             virtual_key = await _get_or_create_cli_virtual_key(
                 user_id=user_id,
                 user_email=user_email,
                 user_data=user_data,
                 prisma_client=prisma_client,
+                preferred_team_id=preferred_team_id,
             )
+
+            if preferred_team_id and preferred_team_id in teams:
+                resolved_team_id = preferred_team_id
+            else:
+                resolved_team_id = teams[0] if teams else None
+
+            team_alias: Optional[str] = None
+            if resolved_team_id:
+                try:
+                    team_row = await prisma_client.db.litellm_teamtable.find_unique(where={"team_id": resolved_team_id})
+                    if team_row:
+                        team_alias = team_row.team_alias
+                except Exception:
+                    pass
+
+            team_details = []
+            if teams:
+                try:
+                    prisma_teams = await prisma_client.db.litellm_teamtable.find_many(where={"team_id": {"in": teams}})
+                    team_details = [{"team_id": t.team_id, "team_alias": t.team_alias} for t in prisma_teams]
+                except Exception:
+                    team_details = [{"team_id": t, "team_alias": None} for t in teams]
 
             from litellm.constants import CLI_SSO_SESSION_CACHE_KEY_PREFIX
 
-            teams = getattr(user_data, "teams", None) or []
             session_data = {
                 "status": "ready",
                 "key": virtual_key,
                 "user_id": user_id,
-                "team_id": teams[0] if teams else None,
+                "team_id": resolved_team_id,
+                "team_alias": team_alias,
+                "teams": teams,
+                "team_details": team_details,
             }
             cache_key = f"{CLI_SSO_SESSION_CACHE_KEY_PREFIX}:{cli_key}"
             user_api_key_cache.set_cache(key=cache_key, value=session_data, ttl=600)
 
-            verbose_proxy_logger.info(f"[HappyElements SSO] CLI flow: virtual key stored in cache for user={user_id}")
+            verbose_proxy_logger.info(
+                f"[HappyElements SSO] CLI flow: virtual key stored in cache for user={user_id}, team={resolved_team_id}"
+            )
 
             from fastapi.responses import HTMLResponse
             from litellm.proxy.common_utils.html_forms.cli_sso_success import render_cli_sso_success_page
