@@ -227,7 +227,7 @@ async def _get_or_create_cli_virtual_key(
         updated_by=user_id,
     )
 
-    virtual_key: str = key_response["key"]
+    virtual_key: str = key_response["token"]
     verbose_proxy_logger.info(f"[HappyElements SSO] CLI virtual key ready for user={user_id}, alias={cli_key_alias}")
     return virtual_key
 
