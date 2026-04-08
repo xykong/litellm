@@ -14,6 +14,18 @@ Configuration required in general_settings:
       callback_url: "https://animal-gateway.kxxxl.com/sso/happyelements/callback"  # Auto-detected if not set
       default_team: "animal-ai"  # Optional: default team for new users
       auto_create_users: true    # Optional: automatically create users (default: true)
+
+CLI SSO Flow:
+  1. animal-mediakit generates a temporary sk-<uuid> session key
+  2. /sso/happyelements/login?key=sk-<uuid> embeds the session key in the callback URL
+  3. HappyElements authenticates the user and redirects to /sso/happyelements/callback?cli_key=sk-<uuid>
+  4. happyelements_callback looks up the user's existing CLI virtual key by alias
+     (key_alias = "cli-sso-<user_id>"). If found and not expired/blocked, returns it.
+     Otherwise creates a new virtual key with that alias (one key per user, reused forever).
+  5. The virtual key is stored in the LiteLLM_VerificationToken table — spend, RPM, TPM
+     tracking all work normally.
+  6. The key is written to the cache under CLI_SSO_SESSION_CACHE_KEY_PREFIX:<session_key>
+     so that /sso/cli/poll/<session_key> can retrieve it.
 """
 
 import os
@@ -174,6 +186,50 @@ async def happyelements_login(request: Request, key: Optional[str] = None):
 
     verbose_proxy_logger.info(f"Redirecting to HappyElements SSO: {login_url[:80]}...")
     return RedirectResponse(url=login_url)
+
+
+async def _get_or_create_cli_virtual_key(
+    user_id: str,
+    user_email: Optional[str],
+    user_data: object,
+    prisma_client: object,
+) -> str:
+    from litellm.proxy.management_endpoints.key_management_endpoints import (
+        generate_key_helper_fn,
+    )
+    from litellm.proxy._types import LitellmUserRoles
+
+    cli_key_alias = f"cli-sso-{user_id}"
+    user_role = getattr(user_data, "user_role", None) or LitellmUserRoles.INTERNAL_USER
+    teams = getattr(user_data, "teams", None) or []
+    team_id = teams[0] if teams else None
+
+    existing_key_row = await prisma_client.db.litellm_verificationtoken.find_first(where={"key_alias": cli_key_alias})
+
+    if existing_key_row is not None:
+        # LiteLLM only stores the SHA-256 hash of keys — the raw sk-xxx is never
+        # persisted. Regenerate: delete the old row then insert fresh so that
+        # generate_key_helper_fn's unique-alias check passes and we get a new raw key.
+        await prisma_client.db.litellm_verificationtoken.delete(where={"token": existing_key_row.token})
+        verbose_proxy_logger.info(
+            f"[HappyElements SSO] Deleted old CLI key for user={user_id}, alias={cli_key_alias}; regenerating"
+        )
+
+    key_response = await generate_key_helper_fn(
+        request_type="key",
+        user_id=user_id,
+        user_email=user_email,
+        user_role=str(user_role),
+        team_id=team_id,
+        key_alias=cli_key_alias,
+        duration=None,
+        created_by=user_id,
+        updated_by=user_id,
+    )
+
+    virtual_key: str = key_response["key"]
+    verbose_proxy_logger.info(f"[HappyElements SSO] CLI virtual key ready for user={user_id}, alias={cli_key_alias}")
+    return virtual_key
 
 
 @router.get(
@@ -369,17 +425,31 @@ async def happyelements_callback(
         )
 
         if cli_key and cli_key.startswith("sk-"):
-            from litellm.proxy.management_endpoints.ui_sso import cli_sso_callback
+            virtual_key = await _get_or_create_cli_virtual_key(
+                user_id=user_id,
+                user_email=user_email,
+                user_data=user_data,
+                prisma_client=prisma_client,
+            )
 
-            verbose_proxy_logger.info(
-                f"[HappyElements SSO] CLI flow: routing to cli_sso_callback, key={cli_key}, user={user_id}"
-            )
-            return await cli_sso_callback(
-                request=request,
-                key=cli_key,
-                existing_key=None,
-                result=openid_result,
-            )
+            from litellm.constants import CLI_SSO_SESSION_CACHE_KEY_PREFIX
+
+            teams = getattr(user_data, "teams", None) or []
+            session_data = {
+                "status": "ready",
+                "key": virtual_key,
+                "user_id": user_id,
+                "team_id": teams[0] if teams else None,
+            }
+            cache_key = f"{CLI_SSO_SESSION_CACHE_KEY_PREFIX}:{cli_key}"
+            user_api_key_cache.set_cache(key=cache_key, value=session_data, ttl=600)
+
+            verbose_proxy_logger.info(f"[HappyElements SSO] CLI flow: virtual key stored in cache for user={user_id}")
+
+            from fastapi.responses import HTMLResponse
+            from litellm.proxy.common_utils.html_forms.cli_sso_success import render_cli_sso_success_page
+
+            return HTMLResponse(content=render_cli_sso_success_page(), status_code=200)
 
         redirect_response = await SSOAuthenticationHandler.get_redirect_response_from_openid(
             result=openid_result,
