@@ -238,6 +238,7 @@ async def _get_or_create_cli_virtual_key(
         key_alias=cli_key_alias,
         duration=None,
         models=[],
+        inherit_user_models=False,
         created_by=user_id,
         updated_by=user_id,
     )
