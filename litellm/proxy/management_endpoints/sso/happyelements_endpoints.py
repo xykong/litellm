@@ -237,6 +237,7 @@ async def _get_or_create_cli_virtual_key(
         team_id=team_id,
         key_alias=cli_key_alias,
         duration=None,
+        models=[],
         created_by=user_id,
         updated_by=user_id,
     )
