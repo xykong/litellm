@@ -1341,6 +1341,61 @@ async def cli_poll_key(key_id: str, team_id: Optional[str] = None):
         session_data = user_api_key_cache.get_cache(key=cache_key)
 
         if session_data:
+            if session_data.get("status") == "pending_team_selection":
+                user_teams = session_data.get("teams", [])
+                user_team_details = session_data.get("team_details")
+                user_id = session_data.get("user_id", "")
+                if team_id is not None:
+                    if team_id not in user_teams:
+                        raise HTTPException(
+                            status_code=403,
+                            detail=f"User does not belong to team: {team_id}. Available teams: {user_teams}",
+                        )
+                    from litellm.proxy.management_endpoints.sso.happyelements_endpoints import (
+                        _get_or_create_cli_virtual_key,
+                    )
+                    from litellm.proxy.proxy_server import prisma_client as _prisma_client
+
+                    user_email = session_data.get("user_email")
+                    user_data_obj = await _prisma_client.db.litellm_usertable.find_unique(where={"user_id": user_id})
+                    virtual_key = await _get_or_create_cli_virtual_key(
+                        user_id=user_id,
+                        user_email=user_email,
+                        user_data=user_data_obj,
+                        prisma_client=_prisma_client,
+                        preferred_team_id=team_id,
+                    )
+                    team_alias: Optional[str] = None
+                    try:
+                        team_row = await _prisma_client.db.litellm_teamtable.find_unique(where={"team_id": team_id})
+                        if team_row:
+                            team_alias = team_row.team_alias
+                    except Exception:
+                        pass
+                    user_api_key_cache.delete_cache(key=cache_key)
+                    verbose_proxy_logger.info(
+                        f"CLI poll: key generated after team selection for user={user_id}, team={team_id}"
+                    )
+                    return {
+                        "status": "ready",
+                        "key": virtual_key,
+                        "user_id": user_id,
+                        "team_id": team_id,
+                        "team_alias": team_alias,
+                        "teams": user_teams,
+                        "team_details": user_team_details,
+                    }
+                verbose_proxy_logger.info(
+                    f"CLI poll: returning teams for selection, user={user_id}, teams={user_teams}"
+                )
+                return {
+                    "status": "ready",
+                    "user_id": user_id,
+                    "teams": user_teams,
+                    "team_details": user_team_details,
+                    "requires_team_selection": True,
+                }
+
             # Fast path: session already contains a resolved virtual key (sk-xxx).
             # This happens when happyelements_callback handled the CLI flow and
             # stored the key directly. Return it immediately without generating a JWT.

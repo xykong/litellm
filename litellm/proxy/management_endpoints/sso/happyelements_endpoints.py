@@ -444,28 +444,6 @@ async def happyelements_callback(
             teams = getattr(user_data, "teams", None) or []
             preferred_team_id: Optional[str] = request.query_params.get("preferred_team_id")
 
-            virtual_key = await _get_or_create_cli_virtual_key(
-                user_id=user_id,
-                user_email=user_email,
-                user_data=user_data,
-                prisma_client=prisma_client,
-                preferred_team_id=preferred_team_id,
-            )
-
-            if preferred_team_id and preferred_team_id in teams:
-                resolved_team_id = preferred_team_id
-            else:
-                resolved_team_id = teams[0] if teams else None
-
-            team_alias: Optional[str] = None
-            if resolved_team_id:
-                try:
-                    team_row = await prisma_client.db.litellm_teamtable.find_unique(where={"team_id": resolved_team_id})
-                    if team_row:
-                        team_alias = team_row.team_alias
-                except Exception:
-                    pass
-
             team_details = []
             if teams:
                 try:
@@ -476,21 +454,60 @@ async def happyelements_callback(
 
             from litellm.constants import CLI_SSO_SESSION_CACHE_KEY_PREFIX
 
-            session_data = {
-                "status": "ready",
-                "key": virtual_key,
-                "user_id": user_id,
-                "team_id": resolved_team_id,
-                "team_alias": team_alias,
-                "teams": teams,
-                "team_details": team_details,
-            }
-            cache_key = f"{CLI_SSO_SESSION_CACHE_KEY_PREFIX}:{cli_key}"
-            user_api_key_cache.set_cache(key=cache_key, value=session_data, ttl=600)
+            needs_team_selection = len(teams) > 1 and not preferred_team_id
 
-            verbose_proxy_logger.info(
-                f"[HappyElements SSO] CLI flow: virtual key stored in cache for user={user_id}, team={resolved_team_id}"
-            )
+            if needs_team_selection:
+                session_data = {
+                    "status": "pending_team_selection",
+                    "user_id": user_id,
+                    "user_email": user_email,
+                    "teams": teams,
+                    "team_details": team_details,
+                }
+                cache_key = f"{CLI_SSO_SESSION_CACHE_KEY_PREFIX}:{cli_key}"
+                user_api_key_cache.set_cache(key=cache_key, value=session_data, ttl=600)
+                verbose_proxy_logger.info(
+                    f"[HappyElements SSO] CLI flow: team selection required for user={user_id}, teams={teams}"
+                )
+            else:
+                virtual_key = await _get_or_create_cli_virtual_key(
+                    user_id=user_id,
+                    user_email=user_email,
+                    user_data=user_data,
+                    prisma_client=prisma_client,
+                    preferred_team_id=preferred_team_id,
+                )
+
+                if preferred_team_id and preferred_team_id in teams:
+                    resolved_team_id = preferred_team_id
+                else:
+                    resolved_team_id = teams[0] if teams else None
+
+                team_alias: Optional[str] = None
+                if resolved_team_id:
+                    try:
+                        team_row = await prisma_client.db.litellm_teamtable.find_unique(
+                            where={"team_id": resolved_team_id}
+                        )
+                        if team_row:
+                            team_alias = team_row.team_alias
+                    except Exception:
+                        pass
+
+                session_data = {
+                    "status": "ready",
+                    "key": virtual_key,
+                    "user_id": user_id,
+                    "team_id": resolved_team_id,
+                    "team_alias": team_alias,
+                    "teams": teams,
+                    "team_details": team_details,
+                }
+                cache_key = f"{CLI_SSO_SESSION_CACHE_KEY_PREFIX}:{cli_key}"
+                user_api_key_cache.set_cache(key=cache_key, value=session_data, ttl=600)
+                verbose_proxy_logger.info(
+                    f"[HappyElements SSO] CLI flow: virtual key stored in cache for user={user_id}, team={resolved_team_id}"
+                )
 
             from fastapi.responses import HTMLResponse
             from litellm.proxy.common_utils.html_forms.cli_sso_success import render_cli_sso_success_page
