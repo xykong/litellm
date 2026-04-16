@@ -529,7 +529,6 @@ async def happyelements_callback(
         return redirect_response
 
     except HTTPException:
-        # Re-raise HTTP exceptions
         raise
     except Exception as e:
         verbose_proxy_logger.error(f"HappyElements SSO callback error: {str(e)}", exc_info=True)
@@ -537,3 +536,86 @@ async def happyelements_callback(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"SSO authentication failed: {str(e)}",
         )
+
+
+@router.post(
+    "/sso/cli/switch-team",
+    tags=["sso"],
+    include_in_schema=False,
+)
+async def cli_switch_team(request: Request):
+    """
+    Switch the team associated with the caller's CLI virtual key.
+
+    Accepts JSON body: {"team_id": "<target-team-id>"}
+    Authorization: Bearer <current-cli-token>
+
+    Re-generates the caller's CLI virtual key bound to the requested team
+    and returns the new key. No browser interaction required.
+    """
+    from litellm.proxy.proxy_server import prisma_client, user_api_key_cache
+    from litellm.proxy.auth.user_api_key_auth import user_api_key_auth
+    from litellm.proxy._types import UserAPIKeyAuth
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing Bearer token")
+    current_token = auth_header[len("Bearer ") :]
+
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    target_team_id: Optional[str] = body.get("team_id")
+    if not target_team_id:
+        raise HTTPException(status_code=400, detail="team_id is required")
+
+    if not prisma_client:
+        raise HTTPException(status_code=500, detail="Database not configured")
+
+    token_hash = prisma_client.hash_token(token=current_token)
+    key_row = await prisma_client.db.litellm_verificationtoken.find_unique(where={"token": token_hash})
+    if not key_row:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    user_id: str = key_row.user_id or ""
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Token has no associated user")
+
+    user_data = await prisma_client.db.litellm_usertable.find_unique(where={"user_id": user_id})
+    if not user_data:
+        raise HTTPException(status_code=404, detail=f"User {user_id} not found")
+
+    user_teams: list = getattr(user_data, "teams", None) or []
+    if target_team_id not in user_teams:
+        raise HTTPException(
+            status_code=403,
+            detail=f"User does not belong to team {target_team_id}. Available: {user_teams}",
+        )
+
+    new_key = await _get_or_create_cli_virtual_key(
+        user_id=user_id,
+        user_email=getattr(user_data, "user_email", None),
+        user_data=user_data,
+        prisma_client=prisma_client,
+        preferred_team_id=target_team_id,
+    )
+
+    team_alias: Optional[str] = None
+    try:
+        team_row = await prisma_client.db.litellm_teamtable.find_unique(where={"team_id": target_team_id})
+        if team_row:
+            team_alias = team_row.team_alias
+    except Exception:
+        pass
+
+    verbose_proxy_logger.info(f"[HappyElements SSO] CLI team switch: user={user_id}, new_team={target_team_id}")
+    return {
+        "status": "ready",
+        "key": new_key,
+        "user_id": user_id,
+        "team_id": target_team_id,
+        "team_alias": team_alias,
+        "teams": user_teams,
+    }
