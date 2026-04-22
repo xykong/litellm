@@ -42,6 +42,7 @@ from litellm.proxy._types import (
     NewTeamRequest,
     NewUserRequest,
     ProxyException,
+    SpecialModelNames,
     TeamMemberAddRequest,
     UserAPIKeyAuth,
 )
@@ -216,6 +217,7 @@ async def _ensure_user_in_team(
                     team_alias=team_alias,
                     organization_id=_HE_ORG_ID,
                     team_member_permissions=["/key/generate"],
+                    models=[SpecialModelNames.all_proxy_models.value],
                 ),
                 http_request=FastAPIRequest(
                     scope={"type": "http", "path": "/sso/happyelements/callback"}
@@ -310,19 +312,18 @@ async def _get_or_create_cli_virtual_key(
     prisma_client: object,
     preferred_team_id: Optional[str] = None,
     sso_username: Optional[str] = None,
-    usage: str = "sso",
+    usage: str = "cli-sso",
 ) -> str:
     from litellm.proxy.management_endpoints.key_management_endpoints import (
         generate_key_helper_fn,
     )
     from litellm.proxy._types import LitellmUserRoles
+    from datetime import datetime, timezone
 
     import uuid
 
     name = sso_username or user_id
-    alias_prefix = f"cli-{usage}-{name}-"
-
-    cli_key_alias = f"{alias_prefix}{uuid.uuid4().hex[:8]}"
+    alias_prefix = f"{usage}-{name}-"
 
     user_role = getattr(user_data, "user_role", None) or LitellmUserRoles.INTERNAL_USER
     teams = getattr(user_data, "teams", None) or []
@@ -332,6 +333,55 @@ async def _get_or_create_cli_virtual_key(
     else:
         team_id = teams[0] if teams else None
 
+    existing_key_row = None
+    try:
+        now = datetime.now(timezone.utc)
+        where_clause: dict = {
+            "user_id": user_id,
+            "key_alias": {"startswith": alias_prefix},
+            "OR": [
+                {"expires": None},
+                {"expires": {"gt": now}},
+            ],
+        }
+        if team_id:
+            where_clause["team_id"] = team_id
+
+        existing_key_row = await prisma_client.db.litellm_verificationtoken.find_first(
+            where=where_clause,
+            order={"created_at": "desc"},
+        )
+    except Exception as e:
+        verbose_proxy_logger.warning(
+            f"[HappyElements SSO] Failed to query existing CLI key for user={user_id}, alias_prefix={alias_prefix}: {e}"
+        )
+
+    if existing_key_row is not None:
+        cli_token: Optional[str] = None
+        try:
+            from litellm.proxy.common_utils.encrypt_decrypt_utils import decrypt_value_helper
+
+            meta = existing_key_row.metadata or {}
+            if isinstance(meta, dict):
+                encrypted = meta.get("cli_token")
+                if encrypted:
+                    cli_token = decrypt_value_helper(
+                        value=encrypted,
+                        key="cli_token",
+                        exception_type="debug",
+                        return_original_value=False,
+                    )
+        except Exception:
+            cli_token = None
+
+        if cli_token:
+            verbose_proxy_logger.info(
+                f"[HappyElements SSO] Reusing existing CLI key for user={user_id}, alias={existing_key_row.key_alias}, team={team_id}"
+            )
+            return cli_token
+
+    cli_key_alias = f"{alias_prefix}{uuid.uuid4().hex[:6]}"
+
     key_response = await generate_key_helper_fn(
         request_type="key",
         user_id=user_id,
@@ -340,15 +390,30 @@ async def _get_or_create_cli_virtual_key(
         team_id=team_id,
         key_alias=cli_key_alias,
         duration=None,
-        models=[],
+        models=[SpecialModelNames.all_team_models.value],
         inherit_user_models=False,
         created_by=user_id,
         updated_by=user_id,
     )
 
     virtual_key: str = key_response["token"]
+
+    try:
+        from litellm.proxy.common_utils.encrypt_decrypt_utils import encrypt_value_helper
+
+        encrypted_token = encrypt_value_helper(virtual_key)
+        token_hash = prisma_client.hash_token(token=virtual_key)
+        await prisma_client.db.litellm_verificationtoken.update(
+            where={"token": token_hash},
+            data={"metadata": {"cli_token": encrypted_token}},
+        )
+    except Exception as e:
+        verbose_proxy_logger.warning(
+            f"[HappyElements SSO] Failed to persist cli_token in metadata for user={user_id}: {e}"
+        )
+
     verbose_proxy_logger.info(
-        f"[HappyElements SSO] CLI virtual key ready for user={user_id}, alias={cli_key_alias}, team={team_id}"
+        f"[HappyElements SSO] CLI virtual key created for user={user_id}, alias={cli_key_alias}, team={team_id}"
     )
     return virtual_key
 
