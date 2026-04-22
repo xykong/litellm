@@ -20,7 +20,7 @@ CLI SSO Flow:
   2. /sso/happyelements/login?key=sk-<uuid> embeds the session key in the callback URL
   3. HappyElements authenticates the user and redirects to /sso/happyelements/callback?cli_key=sk-<uuid>
   4. happyelements_callback looks up the user's existing CLI virtual key by alias
-     (key_alias = "cli-sso-<user_id>"). If found and not expired/blocked, returns it.
+     (key_alias = "cli-<usage>-<sso_username>-<N>"). Each login creates a new key; old keys are retained.
      Otherwise creates a new virtual key with that alias (one key per user, reused forever).
   5. The virtual key is stored in the LiteLLM_VerificationToken table — spend, RPM, TPM
      tracking all work normally.
@@ -309,13 +309,22 @@ async def _get_or_create_cli_virtual_key(
     user_data: object,
     prisma_client: object,
     preferred_team_id: Optional[str] = None,
+    sso_username: Optional[str] = None,
+    usage: str = "sso",
 ) -> str:
     from litellm.proxy.management_endpoints.key_management_endpoints import (
         generate_key_helper_fn,
     )
     from litellm.proxy._types import LitellmUserRoles
 
-    cli_key_alias = f"cli-sso-{user_id}"
+    name = sso_username or user_id
+    alias_prefix = f"cli-{usage}-{name}-"
+
+    existing_count = await prisma_client.db.litellm_verificationtoken.count(
+        where={"key_alias": {"startswith": alias_prefix}}
+    )
+    cli_key_alias = f"{alias_prefix}{existing_count + 1}"
+
     user_role = getattr(user_data, "user_role", None) or LitellmUserRoles.INTERNAL_USER
     teams = getattr(user_data, "teams", None) or []
 
@@ -323,21 +332,6 @@ async def _get_or_create_cli_virtual_key(
         team_id = preferred_team_id
     else:
         team_id = teams[0] if teams else None
-
-    existing_key_row = await prisma_client.db.litellm_verificationtoken.find_first(
-        where={"key_alias": cli_key_alias}
-    )
-
-    if existing_key_row is not None:
-        # LiteLLM only stores the SHA-256 hash of keys — the raw sk-xxx is never
-        # persisted. Regenerate: delete the old row then insert fresh so that
-        # generate_key_helper_fn's unique-alias check passes and we get a new raw key.
-        await prisma_client.db.litellm_verificationtoken.delete(
-            where={"token": existing_key_row.token}
-        )
-        verbose_proxy_logger.info(
-            f"[HappyElements SSO] Deleted old CLI key for user={user_id}, alias={cli_key_alias}; regenerating"
-        )
 
     key_response = await generate_key_helper_fn(
         request_type="key",
@@ -607,6 +601,7 @@ async def happyelements_callback(
                 session_data = {
                     "status": "pending_team_selection",
                     "user_id": user_id,
+                    "sso_username": username,
                     "user_email": user_email,
                     "teams": teams,
                     "team_details": team_details,
@@ -617,12 +612,15 @@ async def happyelements_callback(
                     f"[HappyElements SSO] CLI flow: team selection required for user={user_id}, teams={teams}"
                 )
             else:
+                preferred_usage: str = request.query_params.get("usage") or "sso"
                 virtual_key = await _get_or_create_cli_virtual_key(
                     user_id=user_id,
                     user_email=user_email,
                     user_data=user_data,
                     prisma_client=prisma_client,
                     preferred_team_id=preferred_team_id,
+                    sso_username=username,
+                    usage=preferred_usage,
                 )
 
                 if preferred_team_id and preferred_team_id in teams:
@@ -645,6 +643,7 @@ async def happyelements_callback(
                     "status": "ready",
                     "key": virtual_key,
                     "user_id": user_id,
+                    "sso_username": username,
                     "team_id": resolved_team_id,
                     "team_alias": team_alias,
                     "teams": teams,
@@ -721,6 +720,7 @@ async def cli_switch_team(request: Request):
     target_team_id: Optional[str] = body.get("team_id")
     if not target_team_id:
         raise HTTPException(status_code=400, detail="team_id is required")
+    target_usage: str = body.get("usage") or "sso"
 
     if not prisma_client:
         raise HTTPException(status_code=500, detail="Database not configured")
@@ -749,12 +749,16 @@ async def cli_switch_team(request: Request):
             detail=f"User does not belong to team {target_team_id}. Available: {user_teams}",
         )
 
+    user_email = getattr(user_data, "user_email", None)
+    sso_username = user_email.split("@")[0] if user_email else None
     new_key = await _get_or_create_cli_virtual_key(
         user_id=user_id,
-        user_email=getattr(user_data, "user_email", None),
+        user_email=user_email,
         user_data=user_data,
         prisma_client=prisma_client,
         preferred_team_id=target_team_id,
+        sso_username=sso_username,
+        usage=target_usage,
     )
 
     team_alias: Optional[str] = None

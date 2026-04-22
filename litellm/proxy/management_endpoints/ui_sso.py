@@ -1316,7 +1316,7 @@ async def cli_sso_callback(
 
 
 @router.get("/sso/cli/poll/{key_id}", tags=["experimental"], include_in_schema=False)
-async def cli_poll_key(key_id: str, team_id: Optional[str] = None):
+async def cli_poll_key(key_id: str, team_id: Optional[str] = None, usage: Optional[str] = None):
     """
     CLI polling endpoint - retrieves session from cache and generates JWT.
 
@@ -1358,12 +1358,15 @@ async def cli_poll_key(key_id: str, team_id: Optional[str] = None):
 
                     user_email = session_data.get("user_email")
                     user_data_obj = await _prisma_client.db.litellm_usertable.find_unique(where={"user_id": user_id})
+                    sso_username = session_data.get("sso_username")
                     virtual_key = await _get_or_create_cli_virtual_key(
                         user_id=user_id,
                         user_email=user_email,
                         user_data=user_data_obj,
                         prisma_client=_prisma_client,
                         preferred_team_id=team_id,
+                        sso_username=sso_username,
+                        usage=usage or "sso",
                     )
                     team_alias: Optional[str] = None
                     try:
@@ -1391,6 +1394,7 @@ async def cli_poll_key(key_id: str, team_id: Optional[str] = None):
                 return {
                     "status": "ready",
                     "user_id": user_id,
+                    "sso_username": session_data.get("sso_username"),
                     "teams": user_teams,
                     "team_details": user_team_details,
                     "requires_team_selection": True,
