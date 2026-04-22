@@ -317,13 +317,12 @@ async def _get_or_create_cli_virtual_key(
     )
     from litellm.proxy._types import LitellmUserRoles
 
+    import uuid
+
     name = sso_username or user_id
     alias_prefix = f"cli-{usage}-{name}-"
 
-    existing_count = await prisma_client.db.litellm_verificationtoken.count(
-        where={"key_alias": {"startswith": alias_prefix}}
-    )
-    cli_key_alias = f"{alias_prefix}{existing_count + 1}"
+    cli_key_alias = f"{alias_prefix}{uuid.uuid4().hex[:8]}"
 
     user_role = getattr(user_data, "user_role", None) or LitellmUserRoles.INTERNAL_USER
     teams = getattr(user_data, "teams", None) or []
