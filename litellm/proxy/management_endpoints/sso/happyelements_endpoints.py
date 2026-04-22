@@ -318,8 +318,13 @@ async def _get_or_create_cli_virtual_key(
         generate_key_helper_fn,
     )
     from litellm.proxy._types import LitellmUserRoles
+    from litellm.proxy.common_utils.encrypt_decrypt_utils import (
+        decrypt_value_helper,
+        encrypt_value_helper,
+    )
     from datetime import datetime, timezone
-
+    from litellm.constants import LENGTH_OF_LITELLM_GENERATED_KEY
+    import secrets
     import uuid
 
     name = sso_username or user_id
@@ -338,7 +343,7 @@ async def _get_or_create_cli_virtual_key(
         now = datetime.now(timezone.utc)
         where_clause: dict = {
             "user_id": user_id,
-            "key_alias": {"startswith": alias_prefix},
+            "key_alias": {"startsWith": alias_prefix},
             "OR": [
                 {"expires": None},
                 {"expires": {"gt": now}},
@@ -359,8 +364,6 @@ async def _get_or_create_cli_virtual_key(
     if existing_key_row is not None:
         cli_token: Optional[str] = None
         try:
-            from litellm.proxy.common_utils.encrypt_decrypt_utils import decrypt_value_helper
-
             meta = existing_key_row.metadata or {}
             if isinstance(meta, dict):
                 encrypted = meta.get("cli_token")
@@ -381,9 +384,12 @@ async def _get_or_create_cli_virtual_key(
             return cli_token
 
     cli_key_alias = f"{alias_prefix}{uuid.uuid4().hex[:6]}"
+    virtual_key = f"sk-{secrets.token_urlsafe(LENGTH_OF_LITELLM_GENERATED_KEY)}"
+    encrypted_token = encrypt_value_helper(virtual_key)
 
-    key_response = await generate_key_helper_fn(
+    await generate_key_helper_fn(
         request_type="key",
+        token=virtual_key,
         user_id=user_id,
         user_email=user_email,
         user_role=str(user_role),
@@ -392,25 +398,10 @@ async def _get_or_create_cli_virtual_key(
         duration=None,
         models=[SpecialModelNames.all_team_models.value],
         inherit_user_models=False,
+        metadata={"cli_token": encrypted_token},
         created_by=user_id,
         updated_by=user_id,
     )
-
-    virtual_key: str = key_response["token"]
-
-    try:
-        from litellm.proxy.common_utils.encrypt_decrypt_utils import encrypt_value_helper
-
-        encrypted_token = encrypt_value_helper(virtual_key)
-        token_hash = prisma_client.hash_token(token=virtual_key)
-        await prisma_client.db.litellm_verificationtoken.update(
-            where={"token": token_hash},
-            data={"metadata": {"cli_token": encrypted_token}},
-        )
-    except Exception as e:
-        verbose_proxy_logger.warning(
-            f"[HappyElements SSO] Failed to persist cli_token in metadata for user={user_id}: {e}"
-        )
 
     verbose_proxy_logger.info(
         f"[HappyElements SSO] CLI virtual key created for user={user_id}, alias={cli_key_alias}, team={team_id}"
