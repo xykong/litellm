@@ -38,14 +38,23 @@ from litellm.proxy._types import (
     CommonProxyErrors,
     LiteLLM_UserTable,
     LitellmUserRoles,
+    Member,
+    NewTeamRequest,
     NewUserRequest,
     ProxyException,
+    TeamMemberAddRequest,
     UserAPIKeyAuth,
 )
 from litellm.proxy.auth.auth_checks import get_user_object
 from litellm.proxy.management_endpoints.sso.happyelements_sso import HappyElementsSSO
 from litellm.proxy.management_endpoints.internal_user_endpoints import new_user
+from litellm.proxy.management_endpoints.team_endpoints import new_team, team_member_add
 from litellm.proxy.utils import PrismaClient
+
+# Organization ID for 开心消消乐 project in LiteLLM
+_HE_ORG_ID = "9661420d-7813-4ae9-a843-7b75ea7f2cb6"
+# Department API base URL
+_DEPT_API_URL = "https://ale.kxxxl.com/server/department.action"
 
 
 router = APIRouter()
@@ -150,6 +159,99 @@ def get_client_ip(request: Request) -> str:
     return client_ip
 
 
+async def _get_department_team_alias(sso: str) -> Optional[str]:
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            resp = await client.get(
+                _DEPT_API_URL,
+                params={"method": "getBySso", "sso": sso},
+            )
+        data = resp.json()
+        if data.get("code") != 0:
+            verbose_proxy_logger.warning(
+                f"[HappyElements SSO] Department API returned non-zero code for sso={sso}: {data.get('code')}"
+            )
+            return None
+        result = data.get("result") or {}
+        parts = [
+            d
+            for d in [
+                result.get("一级部门"),
+                result.get("二级部门"),
+                result.get("三级部门"),
+            ]
+            if d
+        ]
+        if not parts:
+            verbose_proxy_logger.warning(
+                f"[HappyElements SSO] All department levels empty for sso={sso}, skipping team assignment"
+            )
+            return None
+        return "-".join(parts)
+    except Exception as e:
+        verbose_proxy_logger.warning(
+            f"[HappyElements SSO] Failed to fetch department info for sso={sso}: {e}"
+        )
+        return None
+
+
+async def _ensure_user_in_team(
+    user_id: str,
+    user_teams: list,
+    team_alias: str,
+    prisma_client: object,
+) -> None:
+    try:
+        existing_team = await prisma_client.db.litellm_teamtable.find_first(
+            where={"team_alias": team_alias}
+        )
+        if existing_team is None:
+            admin_auth = UserAPIKeyAuth(user_role=LitellmUserRoles.PROXY_ADMIN)
+            from fastapi import Request as FastAPIRequest
+
+            created = await new_team(
+                data=NewTeamRequest(
+                    team_alias=team_alias,
+                    organization_id=_HE_ORG_ID,
+                    team_member_permissions=["/key/generate"],
+                ),
+                http_request=FastAPIRequest(
+                    scope={"type": "http", "path": "/sso/happyelements/callback"}
+                ),
+                user_api_key_dict=admin_auth,
+            )
+            team_id = created["team_id"]
+            verbose_proxy_logger.info(
+                f"[HappyElements SSO] Created team team_alias={team_alias}, team_id={team_id}"
+            )
+        else:
+            team_id = existing_team.team_id
+
+        if team_id not in (user_teams or []):
+            await team_member_add(
+                data=TeamMemberAddRequest(
+                    team_id=team_id,
+                    member=Member(user_id=user_id, role="user"),
+                ),
+                user_api_key_dict=UserAPIKeyAuth(
+                    user_role=LitellmUserRoles.PROXY_ADMIN
+                ),
+            )
+            verbose_proxy_logger.info(
+                f"[HappyElements SSO] Added user={user_id} to team={team_alias} ({team_id})"
+            )
+        else:
+            verbose_proxy_logger.debug(
+                f"[HappyElements SSO] User={user_id} already in team={team_alias}, skipping"
+            )
+    except Exception as e:
+        verbose_proxy_logger.warning(
+            f"[HappyElements SSO] Failed to ensure user={user_id} in team={team_alias}: {e}"
+        )
+
+
 @router.get(
     "/sso/happyelements/login",
     tags=["sso"],
@@ -189,9 +291,13 @@ async def happyelements_login(
         callback_url = f"{base_callback}?cli_key={key}"
         if preferred_team_id:
             callback_url += f"&preferred_team_id={preferred_team_id}"
-        verbose_proxy_logger.info(f"CLI SSO login: embedding key in callback URL, key={key}")
+        verbose_proxy_logger.info(
+            f"CLI SSO login: embedding key in callback URL, key={key}"
+        )
 
-    login_url = sso_client.generate_login_url(client_ip=client_ip, callback_url_override=callback_url)
+    login_url = sso_client.generate_login_url(
+        client_ip=client_ip, callback_url_override=callback_url
+    )
 
     verbose_proxy_logger.info(f"Redirecting to HappyElements SSO: {login_url[:80]}...")
     return RedirectResponse(url=login_url)
@@ -218,13 +324,17 @@ async def _get_or_create_cli_virtual_key(
     else:
         team_id = teams[0] if teams else None
 
-    existing_key_row = await prisma_client.db.litellm_verificationtoken.find_first(where={"key_alias": cli_key_alias})
+    existing_key_row = await prisma_client.db.litellm_verificationtoken.find_first(
+        where={"key_alias": cli_key_alias}
+    )
 
     if existing_key_row is not None:
         # LiteLLM only stores the SHA-256 hash of keys — the raw sk-xxx is never
         # persisted. Regenerate: delete the old row then insert fresh so that
         # generate_key_helper_fn's unique-alias check passes and we get a new raw key.
-        await prisma_client.db.litellm_verificationtoken.delete(where={"token": existing_key_row.token})
+        await prisma_client.db.litellm_verificationtoken.delete(
+            where={"token": existing_key_row.token}
+        )
         verbose_proxy_logger.info(
             f"[HappyElements SSO] Deleted old CLI key for user={user_id}, alias={cli_key_alias}; regenerating"
         )
@@ -339,8 +449,18 @@ async def happyelements_callback(
                 f"[HappyElements SSO] Email not provided by SSO, constructed from username: {user_email}"
             )
 
+        sso_config = general_settings.get("happyelements_sso", {})
+
+        dept_team_alias = await _get_department_team_alias(username)
+        if dept_team_alias is not None:
+            resolved_team_alias: Optional[str] = dept_team_alias
+        else:
+            resolved_team_alias = sso_config.get("default_team")
+
         # Check if user exists
-        existing_user = await prisma_client.db.litellm_usertable.find_unique(where={"user_id": user_id})
+        existing_user = await prisma_client.db.litellm_usertable.find_unique(
+            where={"user_id": user_id}
+        )
 
         if existing_user:
             verbose_proxy_logger.info(f"Existing user found: {user_id}")
@@ -356,12 +476,25 @@ async def happyelements_callback(
                     where={"user_id": user_id},
                     data=update_data,
                 )
-                verbose_proxy_logger.info(f"Updated user {user_id} with new data: {update_data}")
+                verbose_proxy_logger.info(
+                    f"Updated user {user_id} with new data: {update_data}"
+                )
 
             user_data = existing_user
+
+            if resolved_team_alias:
+                existing_teams = list(getattr(existing_user, "teams", None) or [])
+                await _ensure_user_in_team(
+                    user_id=user_id,
+                    user_teams=existing_teams,
+                    team_alias=resolved_team_alias,
+                    prisma_client=prisma_client,
+                )
+                user_data = await prisma_client.db.litellm_usertable.find_unique(
+                    where={"user_id": user_id}
+                )
         else:
             # Auto-create user if enabled
-            sso_config = general_settings.get("happyelements_sso", {})
             auto_create = sso_config.get("auto_create_users", True)
 
             if not auto_create:
@@ -383,36 +516,41 @@ async def happyelements_callback(
 
             user_count = await prisma_client.db.litellm_usertable.count()
             if user_count == 0:
-                verbose_proxy_logger.info(f"First user detected, setting as proxy_admin: {user_id}")
+                verbose_proxy_logger.info(
+                    f"First user detected, setting as proxy_admin: {user_id}"
+                )
                 user_role = LitellmUserRoles.PROXY_ADMIN
 
             verbose_proxy_logger.info(f"Setting user role: {user_role}")
 
-            # Get default team (if configured)
-            default_team = sso_config.get("default_team")
+            admin_auth = UserAPIKeyAuth(user_role=LitellmUserRoles.PROXY_ADMIN)
 
-            # Create new user
             new_user_request = NewUserRequest(
                 user_id=user_id,
                 user_email=user_email,
                 user_role=user_role,
-                teams=([default_team] if default_team else None),
                 auto_create_key=False,
             )
 
-            # Create admin auth for creating user
-            admin_auth = UserAPIKeyAuth(user_role=LitellmUserRoles.PROXY_ADMIN)
-
-            # Create user via internal endpoint
-            user_response = await new_user(
+            await new_user(
                 data=new_user_request,
                 user_api_key_dict=admin_auth,
             )
 
             verbose_proxy_logger.info(f"Created new user: {user_id}")
 
+            if resolved_team_alias:
+                await _ensure_user_in_team(
+                    user_id=user_id,
+                    user_teams=[],
+                    team_alias=resolved_team_alias,
+                    prisma_client=prisma_client,
+                )
+
             # Fetch the created user
-            user_data = await prisma_client.db.litellm_usertable.find_unique(where={"user_id": user_id})
+            user_data = await prisma_client.db.litellm_usertable.find_unique(
+                where={"user_id": user_id}
+            )
 
             if not user_data:
                 raise HTTPException(
@@ -444,13 +582,20 @@ async def happyelements_callback(
 
         if cli_key and cli_key.startswith("sk-"):
             teams = getattr(user_data, "teams", None) or []
-            preferred_team_id: Optional[str] = request.query_params.get("preferred_team_id")
+            preferred_team_id: Optional[str] = request.query_params.get(
+                "preferred_team_id"
+            )
 
             team_details = []
             if teams:
                 try:
-                    prisma_teams = await prisma_client.db.litellm_teamtable.find_many(where={"team_id": {"in": teams}})
-                    team_details = [{"team_id": t.team_id, "team_alias": t.team_alias} for t in prisma_teams]
+                    prisma_teams = await prisma_client.db.litellm_teamtable.find_many(
+                        where={"team_id": {"in": teams}}
+                    )
+                    team_details = [
+                        {"team_id": t.team_id, "team_alias": t.team_alias}
+                        for t in prisma_teams
+                    ]
                 except Exception:
                     team_details = [{"team_id": t, "team_alias": None} for t in teams]
 
@@ -512,16 +657,20 @@ async def happyelements_callback(
                 )
 
             from fastapi.responses import HTMLResponse
-            from litellm.proxy.common_utils.html_forms.cli_sso_success import render_cli_sso_success_page
+            from litellm.proxy.common_utils.html_forms.cli_sso_success import (
+                render_cli_sso_success_page,
+            )
 
             return HTMLResponse(content=render_cli_sso_success_page(), status_code=200)
 
-        redirect_response = await SSOAuthenticationHandler.get_redirect_response_from_openid(
-            result=openid_result,
-            request=request,
-            received_response=None,
-            generic_client_id=None,
-            ui_access_mode=general_settings.get("ui_access_mode"),
+        redirect_response = (
+            await SSOAuthenticationHandler.get_redirect_response_from_openid(
+                result=openid_result,
+                request=request,
+                received_response=None,
+                generic_client_id=None,
+                ui_access_mode=general_settings.get("ui_access_mode"),
+            )
         )
 
         verbose_proxy_logger.info(f"SSO login successful for user: {user_id}")
@@ -531,7 +680,9 @@ async def happyelements_callback(
     except HTTPException:
         raise
     except Exception as e:
-        verbose_proxy_logger.error(f"HappyElements SSO callback error: {str(e)}", exc_info=True)
+        verbose_proxy_logger.error(
+            f"HappyElements SSO callback error: {str(e)}", exc_info=True
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"SSO authentication failed: {str(e)}",
@@ -575,7 +726,9 @@ async def cli_switch_team(request: Request):
         raise HTTPException(status_code=500, detail="Database not configured")
 
     token_hash = prisma_client.hash_token(token=current_token)
-    key_row = await prisma_client.db.litellm_verificationtoken.find_unique(where={"token": token_hash})
+    key_row = await prisma_client.db.litellm_verificationtoken.find_unique(
+        where={"token": token_hash}
+    )
     if not key_row:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
@@ -583,7 +736,9 @@ async def cli_switch_team(request: Request):
     if not user_id:
         raise HTTPException(status_code=401, detail="Token has no associated user")
 
-    user_data = await prisma_client.db.litellm_usertable.find_unique(where={"user_id": user_id})
+    user_data = await prisma_client.db.litellm_usertable.find_unique(
+        where={"user_id": user_id}
+    )
     if not user_data:
         raise HTTPException(status_code=404, detail=f"User {user_id} not found")
 
@@ -604,13 +759,17 @@ async def cli_switch_team(request: Request):
 
     team_alias: Optional[str] = None
     try:
-        team_row = await prisma_client.db.litellm_teamtable.find_unique(where={"team_id": target_team_id})
+        team_row = await prisma_client.db.litellm_teamtable.find_unique(
+            where={"team_id": target_team_id}
+        )
         if team_row:
             team_alias = team_row.team_alias
     except Exception:
         pass
 
-    verbose_proxy_logger.info(f"[HappyElements SSO] CLI team switch: user={user_id}, new_team={target_team_id}")
+    verbose_proxy_logger.info(
+        f"[HappyElements SSO] CLI team switch: user={user_id}, new_team={target_team_id}"
+    )
     return {
         "status": "ready",
         "key": new_key,
