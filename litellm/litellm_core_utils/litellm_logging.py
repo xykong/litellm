@@ -159,6 +159,7 @@ from ..integrations.opik.opik import OpikLogger
 from ..integrations.posthog import PostHogLogger
 from ..integrations.prompt_layer import PromptLayerLogger
 from ..integrations.s3 import S3Logger
+from ..integrations.clickhouse_logger import ClickHouseLogger
 from ..integrations.s3_v2 import S3Logger as S3V2Logger
 from ..integrations.supabase import Supabase
 from ..integrations.traceloop import TraceloopLogger
@@ -3922,6 +3923,14 @@ def _init_custom_logger_compatible_class(  # noqa: PLR0915
             _s3_v2_logger = S3V2Logger()
             _in_memory_loggers.append(_s3_v2_logger)
             return _s3_v2_logger  # type: ignore
+        elif logging_integration == "clickhouse_logger":
+            for callback in _in_memory_loggers:
+                if isinstance(callback, ClickHouseLogger):
+                    return callback  # type: ignore
+
+            _clickhouse_logger = ClickHouseLogger()
+            _in_memory_loggers.append(_clickhouse_logger)
+            return _clickhouse_logger  # type: ignore
         elif logging_integration == "aws_sqs":
             for callback in _in_memory_loggers:
                 if isinstance(callback, SQSLogger):
