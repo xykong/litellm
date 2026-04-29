@@ -9133,6 +9133,12 @@ class ProviderConfigManager:
             )
 
             return get_recraft_image_generation_config(model)
+        elif LlmProviders.TENCENT_VOD == provider:
+            from litellm.llms.tencent_vod.image_generation import (
+                get_tencent_vod_image_generation_config,
+            )
+
+            return get_tencent_vod_image_generation_config(model)
         elif LlmProviders.AIML == provider:
             from litellm.llms.aiml.image_generation import (
                 get_aiml_image_generation_config,
