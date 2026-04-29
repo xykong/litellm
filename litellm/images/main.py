@@ -433,6 +433,22 @@ def image_generation(  # noqa: PLR0915
                 timeout=timeout,
                 client=client,
             )
+        elif custom_llm_provider == litellm.LlmProviders.TENCENT_VOD:
+            from litellm.llms.tencent_vod.image_generation.transformation import (
+                TencentVODImageGenerationConfig,
+            )
+
+            tencent_vod_config = TencentVODImageGenerationConfig()
+            return tencent_vod_config.aimage_generation(
+                model=model or "",
+                prompt=prompt or "",
+                optional_params=optional_params,
+                litellm_params=litellm_params_dict,
+                logging_obj=litellm_logging_obj,
+                model_response=model_response,
+                timeout=timeout or 600,
+                client=client,
+            )
         elif custom_llm_provider == "black_forest_labs":
             # Route to BFL-specific handler (polling required)
             if model is None:
