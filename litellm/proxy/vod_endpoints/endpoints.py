@@ -1,122 +1,86 @@
 from __future__ import annotations
 
-import hashlib
-import hmac
-import json
-import os
-import time
-from datetime import datetime, timezone
 from typing import Any
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
 from litellm._logging import verbose_proxy_logger
+from litellm.llms.tencent_vod.client import (
+    TencentVODClient,
+    _TASK_TYPE_KEY,
+    _normalize_file_infos,
+)
 from litellm.proxy.auth.user_api_key_auth import UserAPIKeyAuth, user_api_key_auth
 
 router = APIRouter()
 
-_VOD_HOST = "vod.tencentcloudapi.com"
-_VOD_ENDPOINT = f"https://{_VOD_HOST}"
-_VOD_REGION = "ap-guangzhou"
-_VOD_VERSION = "2018-07-17"
-_VOD_SERVICE = "vod"
+_vod_client = TencentVODClient()
 
 
-def _get_credentials() -> tuple[str, str, int]:
-    secret_id = os.environ.get("TENCENTCLOUD_SECRET_ID", "")
-    secret_key = os.environ.get("TENCENTCLOUD_SECRET_KEY", "")
-    sub_app_id_str = os.environ.get("VOD_SUB_APP_ID", "0")
-    if not secret_id or not secret_key:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="VOD credentials not configured (TENCENTCLOUD_SECRET_ID / TENCENTCLOUD_SECRET_KEY)",
-        )
-    return secret_id, secret_key, int(sub_app_id_str)
+def _normalize_file_infos_input(file_infos: list[dict]) -> list[dict]:
+    """Normalize user-supplied file_infos (snake_case) to PascalCase for VOD API."""
+    result = []
+    for fi in file_infos:
+        normalized: dict[str, Any] = {}
+        if "FileUrl" in fi:
+            normalized["FileUrl"] = fi["FileUrl"]
+        elif "file_url" in fi:
+            normalized["FileUrl"] = fi["file_url"]
 
+        if "FileId" in fi:
+            normalized["FileId"] = fi["FileId"]
+        elif "file_id" in fi:
+            normalized["FileId"] = fi["file_id"]
 
-def _sign_request(secret_id: str, secret_key: str, action: str, payload: dict) -> dict[str, str]:
-    # TC3-HMAC-SHA256 signature per https://cloud.tencent.com/document/api/267/30661
-    body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode()
-    timestamp = int(time.time())
-    date = datetime.fromtimestamp(timestamp, tz=timezone.utc).strftime("%Y-%m-%d")
+        if "Type" in fi:
+            normalized["Type"] = fi["Type"]
+        elif "type" in fi:
+            normalized["Type"] = fi["type"]
 
-    canonical_headers = f"content-type:application/json\nhost:{_VOD_HOST}\nx-tc-action:{action.lower()}\n"
-    signed_headers = "content-type;host;x-tc-action"
-    hashed_payload = hashlib.sha256(body).hexdigest()
-    canonical_request = "\n".join(
-        [
-            "POST",
-            "/",
-            "",
-            canonical_headers,
-            signed_headers,
-            hashed_payload,
-        ]
-    )
+        if "StorageMode" in fi:
+            normalized["StorageMode"] = fi["StorageMode"]
+        elif "storage_mode" in fi:
+            normalized["StorageMode"] = fi["storage_mode"]
 
-    credential_scope = f"{date}/{_VOD_SERVICE}/tc3_request"
-    hashed_canonical = hashlib.sha256(canonical_request.encode()).hexdigest()
-    string_to_sign = "\n".join(["TC3-HMAC-SHA256", str(timestamp), credential_scope, hashed_canonical])
+        if "Url" in fi:
+            normalized["Url"] = fi["Url"]
+        elif "url" in fi:
+            normalized["Url"] = fi["url"]
 
-    def _hmac(key: bytes, msg: str) -> bytes:
-        return hmac.new(key, msg.encode(), hashlib.sha256).digest()
-
-    secret_date = _hmac(("TC3" + secret_key).encode(), date)
-    secret_service = _hmac(secret_date, _VOD_SERVICE)
-    secret_signing = _hmac(secret_service, "tc3_request")
-    signature = hmac.new(secret_signing, string_to_sign.encode(), hashlib.sha256).hexdigest()
-
-    authorization = (
-        f"TC3-HMAC-SHA256 "
-        f"Credential={secret_id}/{credential_scope}, "
-        f"SignedHeaders={signed_headers}, "
-        f"Signature={signature}"
-    )
-
-    return {
-        "Authorization": authorization,
-        "Content-Type": "application/json",
-        "Host": _VOD_HOST,
-        "X-TC-Action": action,
-        "X-TC-Version": _VOD_VERSION,
-        "X-TC-Timestamp": str(timestamp),
-        "X-TC-Region": _VOD_REGION,
-    }
+        for k, v in fi.items():
+            if k not in (
+                "FileUrl",
+                "file_url",
+                "FileId",
+                "file_id",
+                "Type",
+                "type",
+                "StorageMode",
+                "storage_mode",
+                "Url",
+                "url",
+            ):
+                normalized[k] = v
+        result.append(normalized)
+    return result
 
 
 async def _call_vod(action: str, payload: dict) -> dict:
-    secret_id, secret_key, sub_app_id = _get_credentials()
-    if sub_app_id:
-        payload.setdefault("SubAppId", sub_app_id)
-
-    headers = _sign_request(secret_id, secret_key, action, payload)
-    body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode()
-
-    async with httpx.AsyncClient(timeout=60) as client:
-        resp = await client.post(_VOD_ENDPOINT, headers=headers, content=body)
-
+    """Delegate to the shared TencentVODClient, translating errors to HTTPException."""
     try:
-        data = resp.json()
-    except Exception:
+        return await _vod_client.call_vod(action, payload)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(e),
+        )
+    except RuntimeError as e:
+        verbose_proxy_logger.error(f"[VOD] Action={action} Error: {e}")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"VOD API returned non-JSON (HTTP {resp.status_code}): {resp.text[:200]}",
+            detail=str(e),
         )
-
-    response_body = data.get("Response", data)
-    error = response_body.get("Error") if isinstance(response_body, dict) else None
-    if error:
-        code = error.get("Code", "Unknown")
-        message = error.get("Message", "Unknown error")
-        verbose_proxy_logger.error(f"[VOD] Action={action} Error: {code} - {message}")
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"VOD API error [{code}]: {message}",
-        )
-
-    return response_body
 
 
 async def _parse_body(request: Request) -> dict:
@@ -146,7 +110,7 @@ async def vod_image(
     if body.get("negative_prompt"):
         payload["NegativePrompt"] = body["negative_prompt"]
     if body.get("file_infos"):
-        payload["FileInfos"] = body["file_infos"]
+        payload["FileInfos"] = _normalize_file_infos_input(body["file_infos"])
 
     cfg = body.get("output_config", {})
     output: dict[str, Any] = {"StorageMode": cfg.get("storage_mode", "Temporary")}
@@ -159,7 +123,9 @@ async def vod_image(
     result = await _call_vod("CreateAigcImageTask", payload)
     task_id = result.get("TaskId")
     if not task_id:
-        raise HTTPException(status_code=502, detail=f"VOD did not return TaskId: {result}")
+        raise HTTPException(
+            status_code=502, detail=f"VOD did not return TaskId: {result}"
+        )
     return JSONResponse({"task_id": task_id})
 
 
@@ -181,7 +147,7 @@ async def vod_video(
     if body.get("prompt"):
         payload["Prompt"] = body["prompt"]
     if body.get("file_infos"):
-        payload["FileInfos"] = body["file_infos"]
+        payload["FileInfos"] = _normalize_file_infos_input(body["file_infos"])
     if body.get("last_frame_url"):
         payload["LastFrameUrl"] = body["last_frame_url"]
     if body.get("enhance_prompt"):
@@ -208,7 +174,9 @@ async def vod_video(
     result = await _call_vod("CreateAigcVideoTask", payload)
     task_id = result.get("TaskId")
     if not task_id:
-        raise HTTPException(status_code=502, detail=f"VOD did not return TaskId: {result}")
+        raise HTTPException(
+            status_code=502, detail=f"VOD did not return TaskId: {result}"
+        )
     return JSONResponse({"task_id": task_id})
 
 
@@ -224,18 +192,27 @@ async def vod_task(
     result = await _call_vod("DescribeTaskDetail", {"TaskId": task_id})
     task_type = result.get("TaskType", "")
 
-    if task_type == "AigcImage":
-        aigc = result.get("AigcImageTask", {})
-    elif task_type == "AigcVideo":
-        aigc = result.get("AigcVideoTask", {})
-    elif task_type == "AigcSceneImage":
-        aigc = result.get("AigcSceneImageTask", {})
-    else:
-        aigc = result
+    result_key = _TASK_TYPE_KEY.get(task_type)
+    aigc = result.get(result_key, result) if result_key else result
 
-    status_val = aigc.get("Status", "PROCESSING") if isinstance(aigc, dict) else "PROCESSING"
+    status_val = (
+        aigc.get("Status", "PROCESSING") if isinstance(aigc, dict) else "PROCESSING"
+    )
     task_result = aigc.get("Output", aigc) if isinstance(aigc, dict) else aigc
-    message = (aigc.get("ErrCodeExt") or aigc.get("ErrMsg") or "") if isinstance(aigc, dict) else ""
+    message = (
+        (aigc.get("ErrCodeExt") or aigc.get("ErrMsg") or "")
+        if isinstance(aigc, dict)
+        else ""
+    )
+
+    if (
+        isinstance(task_result, dict)
+        and "FileInfos" in task_result
+        and "file_infos" not in task_result
+    ):
+        file_infos_norm = _normalize_file_infos(task_result)
+        task_result = dict(task_result)
+        task_result["file_infos"] = file_infos_norm
 
     if status_val in ("FINISH", "SUCCESS"):
         norm_status = "FINISH"
@@ -244,7 +221,14 @@ async def vod_task(
     else:
         norm_status = "PROCESSING"
 
-    return JSONResponse({"status": norm_status, "result": task_result, "message": message, "raw": result})
+    return JSONResponse(
+        {
+            "status": norm_status,
+            "result": task_result,
+            "message": message,
+            "raw": result,
+        }
+    )
 
 
 @router.post(
@@ -257,7 +241,9 @@ async def vod_face_info(
     _: UserAPIKeyAuth = Depends(user_api_key_auth),
 ) -> JSONResponse:
     body = await _parse_body(request)
-    result = await _call_vod("DescribeAiAnalysisTaskResult", {"FileInfos": body["file_infos"]})
+    result = await _call_vod(
+        "DescribeAiAnalysisTaskResult", {"FileInfos": body["file_infos"]}
+    )
     return JSONResponse(result)
 
 
@@ -280,7 +266,9 @@ async def vod_element(
     result = await _call_vod("CreatePersonSample", payload)
     person_id = result.get("Person", {}).get("PersonId") or result.get("PersonId")
     if not person_id:
-        raise HTTPException(status_code=502, detail=f"VOD did not return PersonId: {result}")
+        raise HTTPException(
+            status_code=502, detail=f"VOD did not return PersonId: {result}"
+        )
     return JSONResponse({"element_id": person_id})
 
 
@@ -307,7 +295,9 @@ async def vod_scene_image(
     result = await _call_vod("CreateAigcImageTask", payload)
     task_id = result.get("TaskId")
     if not task_id:
-        raise HTTPException(status_code=502, detail=f"VOD did not return TaskId: {result}")
+        raise HTTPException(
+            status_code=502, detail=f"VOD did not return TaskId: {result}"
+        )
     return JSONResponse({"task_id": task_id})
 
 
@@ -323,10 +313,14 @@ async def vod_enhance(
     body = await _parse_body(request)
     payload = {
         "FileId": body["file_id"],
-        "MediaProcessTask": {"TranscodeTaskSet": [{"Definition": body.get("template_id", 101540)}]},
+        "MediaProcessTask": {
+            "TranscodeTaskSet": [{"Definition": body.get("template_id", 101540)}]
+        },
     }
     result = await _call_vod("ProcessMedia", payload)
     task_id = result.get("TaskId")
     if not task_id:
-        raise HTTPException(status_code=502, detail=f"VOD did not return TaskId: {result}")
+        raise HTTPException(
+            status_code=502, detail=f"VOD did not return TaskId: {result}"
+        )
     return JSONResponse({"task_id": task_id})
