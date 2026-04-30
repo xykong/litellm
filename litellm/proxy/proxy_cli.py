@@ -171,9 +171,10 @@ class ProxyInitializationHelpers:
 
         import litellm
         from litellm._logging import _get_uvicorn_json_log_config
+        from litellm.proxy.proxy_server import app
 
         uvicorn_args = {
-            "app": "litellm.proxy.proxy_server:app",
+            "app": app,
             "host": host,
             "port": port,
         }

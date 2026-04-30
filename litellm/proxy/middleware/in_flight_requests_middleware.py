@@ -43,30 +43,6 @@ class InFlightRequestsMiddleware:
         if gauge is not None:
             gauge.inc()  # type: ignore
         try:
-            path = scope.get("path", "")
-            if "/images/" in path:
-                headers = dict(scope.get("headers", []))
-                ct = headers.get(b"content-type", b"").decode("latin-1", errors="replace")
-                if "multipart/form-data" in ct:
-                    body_parts = []
-                    while True:
-                        message = await receive()
-                        body_parts.append(message.get("body", b""))
-                        if not message.get("more_body", False):
-                            break
-                    full_body = b"".join(body_parts)
-                    body_sent = False
-
-                    async def buffered_receive():
-                        nonlocal body_sent
-                        if not body_sent:
-                            body_sent = True
-                            return {"type": "http.request", "body": full_body, "more_body": False}
-                        return {"type": "http.disconnect"}
-
-                    await self.app(scope, buffered_receive, send)
-                    return
-
             await self.app(scope, receive, send)
         finally:
             InFlightRequestsMiddleware._in_flight -= 1
