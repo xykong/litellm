@@ -43,7 +43,23 @@ class InFlightRequestsMiddleware:
         if gauge is not None:
             gauge.inc()  # type: ignore
         try:
-            await self.app(scope, receive, send)
+            body_parts = []
+            while True:
+                message = await receive()
+                body_parts.append(message.get("body", b""))
+                if not message.get("more_body", False):
+                    break
+            full_body = b"".join(body_parts)
+            body_sent = False
+
+            async def buffered_receive():
+                nonlocal body_sent
+                if not body_sent:
+                    body_sent = True
+                    return {"type": "http.request", "body": full_body, "more_body": False}
+                return {"type": "http.disconnect"}
+
+            await self.app(scope, buffered_receive, send)
         finally:
             InFlightRequestsMiddleware._in_flight -= 1
             if gauge is not None:
