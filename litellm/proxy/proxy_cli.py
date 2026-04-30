@@ -481,7 +481,7 @@ class ProxyInitializationHelpers:
     def _get_loop_type():
         if sys.platform in ("win32", "cygwin", "cli"):
             return None
-        return "asyncio"
+        return "uvloop"
 
     @staticmethod
     def _maybe_setup_prometheus_multiproc_dir(
