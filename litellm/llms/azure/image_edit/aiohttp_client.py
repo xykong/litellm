@@ -17,12 +17,15 @@ from litellm.llms.custom_httpx.http_handler import AsyncHTTPHandler
 class AiohttpMultipartResponse:
     """Mimics httpx.Response interface for litellm compatibility."""
 
-    def __init__(self, status_code: int, headers: dict, body: bytes):
+    def __init__(self, status_code: int, headers: dict, body: bytes, url: str = ""):
         self.status_code = status_code
         self.headers = headers
         self._body = body
         self.text = body.decode("utf-8", errors="replace")
         self.content = body
+        self.stream = None
+        self.is_stream_consumed = True
+        self.request = httpx.Request("POST", url)
 
     def json(self):
         import orjson
@@ -32,8 +35,12 @@ class AiohttpMultipartResponse:
         if self.status_code >= 400:
             raise httpx.HTTPStatusError(
                 f"HTTP {self.status_code}",
-                request=httpx.Request("POST", ""),
-                response=httpx.Response(self.status_code, content=self._body),
+                request=self.request,
+                response=httpx.Response(
+                    self.status_code,
+                    content=self._body,
+                    request=self.request,
+                ),
             )
 
 
@@ -114,6 +121,7 @@ class AiohttpMultipartClient(AsyncHTTPHandler):
             status_code=resp.status,
             headers=resp_headers,
             body=body,
+            url=url,
         )
         response.raise_for_status()
         return response
