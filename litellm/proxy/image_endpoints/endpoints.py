@@ -306,6 +306,9 @@ async def image_edit_api(
     # Process request
     #########################################################
 
+    from litellm.llms.azure.image_edit.aiohttp_client import AiohttpMultipartClient
+    data["client"] = AiohttpMultipartClient(timeout=600.0)
+
     processor = ProxyBaseLLMRequestProcessing(data=data)
     try:
         return await processor.base_process_llm_request(
