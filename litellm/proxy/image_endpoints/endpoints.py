@@ -306,31 +306,6 @@ async def image_edit_api(
     # Process request
     #########################################################
 
-    import base64
-    if isinstance(data.get("image"), list):
-        converted = []
-        for f in data["image"]:
-            raw = f.read()
-            f.seek(0)
-            converted.append(base64.b64encode(raw).decode("ascii"))
-        data["image"] = converted if len(converted) > 1 else converted[0]
-    elif hasattr(data.get("image"), "read"):
-        raw = data["image"].read()
-        data["image"].seek(0)
-        data["image"] = base64.b64encode(raw).decode("ascii")
-
-    if isinstance(data.get("mask"), list):
-        converted = []
-        for f in data["mask"]:
-            raw = f.read()
-            f.seek(0)
-            converted.append(base64.b64encode(raw).decode("ascii"))
-        data["mask"] = converted if len(converted) > 1 else converted[0]
-    elif hasattr(data.get("mask"), "read"):
-        raw = data["mask"].read()
-        data["mask"].seek(0)
-        data["mask"] = base64.b64encode(raw).decode("ascii")
-
     processor = ProxyBaseLLMRequestProcessing(data=data)
     try:
         return await processor.base_process_llm_request(
