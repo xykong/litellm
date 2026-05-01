@@ -309,6 +309,28 @@ async def image_edit_api(
     from litellm.llms.azure.image_edit.aiohttp_client import AiohttpMultipartClient
     data["client"] = AiohttpMultipartClient(timeout=600.0)
 
+    import base64 as _b64
+    import io as _io
+
+    def _file_to_b64(f):
+        raw = f.read()
+        f.seek(0)
+        return _b64.b64encode(raw).decode("ascii")
+
+    if isinstance(data.get("image"), list):
+        data["image"] = [_file_to_b64(f) for f in data["image"]]
+        if len(data["image"]) == 1:
+            data["image"] = data["image"][0]
+    elif hasattr(data.get("image"), "read"):
+        data["image"] = _file_to_b64(data["image"])
+
+    if isinstance(data.get("mask"), list):
+        data["mask"] = [_file_to_b64(f) for f in data["mask"]]
+        if len(data["mask"]) == 1:
+            data["mask"] = data["mask"][0]
+    elif hasattr(data.get("mask"), "read"):
+        data["mask"] = _file_to_b64(data["mask"])
+
     processor = ProxyBaseLLMRequestProcessing(data=data)
     try:
         return await processor.base_process_llm_request(
