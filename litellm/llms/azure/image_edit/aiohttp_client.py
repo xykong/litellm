@@ -111,14 +111,29 @@ class AiohttpMultipartClient(AsyncHTTPHandler):
         clean_headers = {k: v for k, v in (headers or {}).items()
                         if k.lower() != "content-type"}
 
-        aio_timeout = aiohttp.ClientTimeout(total=timeout_val)
-        async with aiohttp.ClientSession(timeout=aio_timeout) as session:
-            async with session.post(url, data=form, headers=clean_headers) as resp:
-                body = await resp.read()
-                resp_headers = dict(resp.headers)
+        import asyncio
+        import concurrent.futures
+
+        def _send_in_thread():
+            async def _do_post():
+                aio_timeout = aiohttp.ClientTimeout(total=timeout_val)
+                async with aiohttp.ClientSession(timeout=aio_timeout) as session:
+                    async with session.post(url, data=form, headers=clean_headers) as resp:
+                        body = await resp.read()
+                        return resp.status, dict(resp.headers), body
+
+            loop = asyncio.new_event_loop()
+            try:
+                return loop.run_until_complete(_do_post())
+            finally:
+                loop.close()
+
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        loop = asyncio.get_event_loop()
+        status, resp_headers, body = await loop.run_in_executor(executor, _send_in_thread)
 
         response = AiohttpMultipartResponse(
-            status_code=resp.status,
+            status_code=status,
             headers=resp_headers,
             body=body,
             url=url,
