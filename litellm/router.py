@@ -5995,6 +5995,7 @@ class Router:
             ):
                 return await self._ageneric_api_call_with_fallbacks(
                     original_function=original_function,
+                    client=client,
                     **kwargs,
                 )
             elif call_type in (

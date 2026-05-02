@@ -63,18 +63,12 @@ class AiohttpMultipartClient(AsyncHTTPHandler):
         files: Optional[Any] = None,
         content: Any = None,
     ):
-        import logging
-        _log = logging.getLogger("litellm.aiohttp_multipart")
-
         if files is None:
-            _log.warning("AIOHTTP_MP: files=None, falling back to parent httpx")
             return await super().post(
                 url=url, data=data, json=json, params=params,
                 headers=headers, timeout=timeout, stream=stream,
                 logging_obj=logging_obj, files=files, content=content,
             )
-
-        _log.warning("AIOHTTP_MP: files present, using aiohttp thread-isolated POST to %s", url)
 
         timeout_val = 600.0
         if isinstance(timeout, (int, float)):
@@ -125,12 +119,10 @@ class AiohttpMultipartClient(AsyncHTTPHandler):
                         form.add_field(entry[1], entry[2],
                                        filename=entry[3], content_type=entry[4])
 
-                _log.warning("AIOHTTP_MP: [thread] sending POST to %s with %d form fields", url, len(form_fields))
                 aio_timeout = aiohttp.ClientTimeout(total=timeout_val)
                 async with aiohttp.ClientSession(timeout=aio_timeout) as session:
                     async with session.post(url, data=form, headers=clean_headers) as resp:
                         body = await resp.read()
-                        _log.warning("AIOHTTP_MP: [thread] got response: %d, body_len=%d", resp.status, len(body))
                         return resp.status, dict(resp.headers), body
 
             loop = asyncio.new_event_loop()
@@ -139,11 +131,9 @@ class AiohttpMultipartClient(AsyncHTTPHandler):
             finally:
                 loop.close()
 
-        _log.warning("AIOHTTP_MP: dispatching to thread executor")
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         loop = asyncio.get_event_loop()
         status, resp_headers, body = await loop.run_in_executor(executor, _send_in_thread)
-        _log.warning("AIOHTTP_MP: thread returned status=%d", status)
 
         response = AiohttpMultipartResponse(
             status_code=status,
