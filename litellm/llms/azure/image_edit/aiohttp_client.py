@@ -76,12 +76,12 @@ class AiohttpMultipartClient(AsyncHTTPHandler):
         elif isinstance(timeout, httpx.Timeout):
             timeout_val = timeout.read or 600.0
 
-        form = aiohttp.FormData()
-
+        # Pre-extract file data in the main thread (BytesIO objects may not be thread-safe)
+        form_fields: list = []
         if isinstance(data, dict):
             for k, v in data.items():
                 if v is not None:
-                    form.add_field(k, str(v))
+                    form_fields.append(("field", k, str(v)))
 
         for file_entry in files:
             field_name = file_entry[0]
@@ -99,14 +99,9 @@ class AiohttpMultipartClient(AsyncHTTPHandler):
                 else:
                     raw_bytes = file_content
 
-                form.add_field(
-                    field_name,
-                    raw_bytes,
-                    filename=filename,
-                    content_type=content_type,
-                )
+                form_fields.append(("file", field_name, raw_bytes, filename, content_type))
             else:
-                form.add_field(field_name, file_tuple)
+                form_fields.append(("field", field_name, file_tuple))
 
         clean_headers = {k: v for k, v in (headers or {}).items()
                         if k.lower() != "content-type"}
@@ -116,6 +111,14 @@ class AiohttpMultipartClient(AsyncHTTPHandler):
 
         def _send_in_thread():
             async def _do_post():
+                form = aiohttp.FormData()
+                for entry in form_fields:
+                    if entry[0] == "field":
+                        form.add_field(entry[1], entry[2])
+                    elif entry[0] == "file":
+                        form.add_field(entry[1], entry[2],
+                                       filename=entry[3], content_type=entry[4])
+
                 aio_timeout = aiohttp.ClientTimeout(total=timeout_val)
                 async with aiohttp.ClientSession(timeout=aio_timeout) as session:
                     async with session.post(url, data=form, headers=clean_headers) as resp:
