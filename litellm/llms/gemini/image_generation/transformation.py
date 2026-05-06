@@ -36,7 +36,7 @@ class GoogleImageGenConfig(BaseImageGenerationConfig):
         Google AI Imagen API supported parameters
         https://ai.google.dev/gemini-api/docs/imagen
         """
-        return ["n", "size"]
+        return ["n", "size", "aspect_ratio", "image_size", "ref_images"]
 
     def map_openai_params(
         self,
@@ -51,12 +51,16 @@ class GoogleImageGenConfig(BaseImageGenerationConfig):
         for k, v in non_default_params.items():
             if k not in optional_params.keys():
                 if k in supported_params:
-                    # Map OpenAI parameters to Google format
                     if k == "n":
                         mapped_params["sampleCount"] = v
                     elif k == "size":
-                        # Map OpenAI size format to Google aspectRatio
                         mapped_params["aspectRatio"] = self._map_size_to_aspect_ratio(v)
+                    elif k == "aspect_ratio":
+                        mapped_params["aspectRatio"] = v
+                    elif k == "image_size":
+                        mapped_params["imageSize"] = v
+                    elif k == "ref_images":
+                        mapped_params["ref_images"] = v
                     else:
                         mapped_params[k] = v
         return mapped_params
@@ -162,27 +166,42 @@ class GoogleImageGenConfig(BaseImageGenerationConfig):
         headers: dict,
     ) -> dict:
         """
-        Transform the image generation request to Gemini format
+        Transform the image generation request to Gemini format.
 
-        For Gemini 2.5 Flash Image Preview, use the standard Gemini format with response_modalities:
-        {
-          "contents": [
-            {
-              "parts": [
-                {"text": "Generate an image of..."}
-              ]
-            }
-          ],
-          "generationConfig": {
-            "response_modalities": ["IMAGE", "TEXT"]
-          }
-        }
+        For Gemini Flash Image Preview models, uses generateContent with:
+        - optional imageConfig (aspectRatio, imageSize)
+        - optional inline_data parts for reference images (ref_images)
         """
-        # For Gemini Flash Image Preview models, use standard Gemini format
         if "gemini" in model:
+            # Build parts: reference images first, then text prompt
+            parts: List[dict] = []
+
+            ref_images = optional_params.get("ref_images", [])
+            for ref in ref_images:
+                parts.append(
+                    {
+                        "inline_data": {
+                            "mime_type": ref.get("mime_type", "image/jpeg"),
+                            "data": ref.get("data", ""),
+                        }
+                    }
+                )
+            parts.append({"text": prompt})
+
+            # Build imageConfig from mapped params
+            image_config: dict = {}
+            if "aspectRatio" in optional_params:
+                image_config["aspectRatio"] = optional_params["aspectRatio"]
+            if "imageSize" in optional_params:
+                image_config["imageSize"] = optional_params["imageSize"]
+
+            generation_config: dict = {"response_modalities": ["IMAGE", "TEXT"]}
+            if image_config:
+                generation_config["imageConfig"] = image_config
+
             request_body: dict = {
-                "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {"response_modalities": ["IMAGE", "TEXT"]},
+                "contents": [{"parts": parts}],
+                "generationConfig": generation_config,
             }
             return request_body
         else:
