@@ -195,7 +195,10 @@ class GoogleImageGenConfig(BaseImageGenerationConfig):
             if "imageSize" in optional_params:
                 image_config["imageSize"] = optional_params["imageSize"]
 
-            generation_config: dict = {"response_modalities": ["IMAGE", "TEXT"]}
+            generation_config: dict = {
+                "response_modalities": ["IMAGE", "TEXT"],
+                "thinkingConfig": {"thinkingBudget": -1},
+            }
             if image_config:
                 generation_config["imageConfig"] = image_config
 
