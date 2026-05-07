@@ -3183,6 +3183,9 @@ def get_optional_params_image_gen(
         "size": None,
         "style": None,
         "user": None,
+        "aspect_ratio": None,
+        "image_size": None,
+        "ref_images": None,
     }
 
     non_default_params = _get_non_default_params(
