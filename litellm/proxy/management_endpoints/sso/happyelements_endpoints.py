@@ -272,17 +272,31 @@ async def happyelements_login(
     This endpoint redirects the user to the HappyElements SSO login page.
     After successful authentication, HappyElements will redirect back to the callback endpoint.
 
+    If HappyElements SSO is not configured but Generic OIDC is available,
+    redirects to the Generic OIDC login endpoint instead.
+
     Query Parameters:
         key: Optional CLI session key (sk-...). When provided, the callback will
              route through the CLI SSO flow (virtual key created/reused in DB).
         preferred_team_id: Optional team ID to use for the CLI virtual key.
 
     Returns:
-        RedirectResponse to HappyElements SSO login page
+        RedirectResponse to HappyElements SSO login page or Generic OIDC login
     """
     verbose_proxy_logger.info(
         f"HappyElements SSO login initiated, cli_key={key}, preferred_team_id={preferred_team_id}"
     )
+
+    # If HE SSO is not configured, fall back to Generic OIDC if available
+    from litellm.proxy.proxy_server import general_settings
+    sso_config = (general_settings or {}).get("happyelements_sso") if general_settings else None
+    if not sso_config:
+        generic_client_id = os.getenv("GENERIC_CLIENT_ID")
+        if generic_client_id:
+            verbose_proxy_logger.info(
+                "HappyElements SSO not configured, redirecting to Generic OIDC login"
+            )
+            return RedirectResponse(url="/sso/key/generate")
 
     sso_client = get_happyelements_sso_client()
     client_ip = get_client_ip(request)
