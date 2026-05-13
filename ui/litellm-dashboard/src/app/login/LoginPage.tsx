@@ -203,11 +203,11 @@ function LoginPageContent() {
             block
             size="large"
             onClick={() => {
-              window.location.href = `${getProxyBaseUrl()}/sso/happyelements/login`;
+              window.location.href = `${getProxyBaseUrl()}/sso/key/generate`;
             }}
             className="h-12 rounded-lg font-medium focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200 cursor-pointer"
             style={{ minHeight: "44px" }}
-            aria-label="Sign in with HappyElements SSO"
+            aria-label="Sign in with SSO"
           >
             <span className="flex items-center justify-center">
               <svg
@@ -225,7 +225,7 @@ function LoginPageContent() {
                   d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
                 />
               </svg>
-              Sign in with HappyElements SSO
+              Sign in with SSO
             </span>
           </Button>
 

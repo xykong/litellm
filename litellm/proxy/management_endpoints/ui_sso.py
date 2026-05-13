@@ -1209,7 +1209,7 @@ async def cli_sso_callback(
     existing_key: Optional[str] = None,
     result: Optional[Union[OpenID, dict]] = None,
 ):
-    """CLI SSO callback - stores session info for JWT generation on polling"""
+    """CLI SSO callback - stores session info with pre-resolved virtual key for polling"""
     verbose_proxy_logger.info(f"CLI SSO callback for key: {key}, existing_key: {existing_key}")
 
     from litellm.proxy.proxy_server import (
@@ -1254,18 +1254,34 @@ async def cli_sso_callback(
         if user_info is None:
             raise HTTPException(status_code=500, detail="Failed to retrieve user information from SSO")
 
-        # Store session info in cache (10 min TTL)
         from litellm.constants import CLI_SSO_SESSION_CACHE_KEY_PREFIX
+        from litellm.proxy.management_endpoints.sso.cli_sso_endpoints import (
+            _get_or_create_cli_virtual_key,
+            _get_department_team_alias,
+            _ensure_user_in_team,
+        )
 
-        # Get all teams from user_info - CLI will let user select which one
+        user_id = user_info.user_id
+        user_email = parsed_openid_result.get("user_email")
+        sso_username = user_email.split("@")[0] if user_email else None
+
         teams: List[str] = []
         if hasattr(user_info, "teams") and user_info.teams:
             teams = user_info.teams if isinstance(user_info.teams, list) else []
 
-        # Also fetch team aliases for a better CLI UX. We keep the original
-        # "teams" list of IDs for backwards compatibility and add an
-        # optional "team_details" field containing objects with both
-        # team_id and team_alias.
+        if sso_username:
+            try:
+                dept_team_alias = await _get_department_team_alias(sso_username)
+                if dept_team_alias:
+                    await _ensure_user_in_team(user_id, teams, dept_team_alias, prisma_client)
+                    refreshed_user = await prisma_client.db.litellm_usertable.find_unique(
+                        where={"user_id": user_id}
+                    )
+                    if refreshed_user and refreshed_user.teams:
+                        teams = refreshed_user.teams if isinstance(refreshed_user.teams, list) else []
+            except Exception as e:
+                verbose_proxy_logger.warning(f"[CLI SSO] Auto-team-join failed for {sso_username}: {e}")
+
         team_details: List[Dict[str, Any]] = []
         try:
             if teams:
@@ -1279,19 +1295,54 @@ async def cli_sso_callback(
                         }
                     )
         except Exception as e:
-            # If anything goes wrong here, fall back gracefully without
-            # impacting the SSO flow.
             verbose_proxy_logger.error(f"Error fetching team details for CLI SSO session: {e}")
 
-        session_data = {
-            "user_id": user_info.user_id,
-            "user_role": user_info.user_role,
-            "models": user_info.models if hasattr(user_info, "models") else [],
-            "user_email": parsed_openid_result.get("user_email"),
-            "teams": teams,
-            # Optional rich metadata for clients that want nicer display
-            "team_details": team_details,
-        }
+        needs_team_selection = len(teams) > 1
+
+        if needs_team_selection:
+            session_data = {
+                "status": "pending_team_selection",
+                "user_id": user_id,
+                "sso_username": sso_username,
+                "user_email": user_email,
+                "teams": teams,
+                "team_details": team_details,
+            }
+        else:
+            user_data_obj = await prisma_client.db.litellm_usertable.find_unique(
+                where={"user_id": user_id}
+            )
+            preferred_team_id = teams[0] if teams else None
+            virtual_key = await _get_or_create_cli_virtual_key(
+                user_id=user_id,
+                user_email=user_email,
+                user_data=user_data_obj,
+                prisma_client=prisma_client,
+                preferred_team_id=preferred_team_id,
+                sso_username=sso_username,
+                usage="sso",
+            )
+            resolved_team_alias = None
+            if preferred_team_id:
+                try:
+                    team_row = await prisma_client.db.litellm_teamtable.find_unique(
+                        where={"team_id": preferred_team_id}
+                    )
+                    if team_row:
+                        resolved_team_alias = team_row.team_alias
+                except Exception:
+                    pass
+
+            session_data = {
+                "status": "ready",
+                "key": virtual_key,
+                "user_id": user_id,
+                "sso_username": sso_username,
+                "team_id": preferred_team_id,
+                "team_alias": resolved_team_alias,
+                "teams": teams,
+                "team_details": team_details,
+            }
 
         cache_key = f"{CLI_SSO_SESSION_CACHE_KEY_PREFIX}:{key}"
         user_api_key_cache.set_cache(key=cache_key, value=session_data, ttl=600)
@@ -1351,7 +1402,7 @@ async def cli_poll_key(key_id: str, team_id: Optional[str] = None, usage: Option
                             status_code=403,
                             detail=f"User does not belong to team: {team_id}. Available teams: {user_teams}",
                         )
-                    from litellm.proxy.management_endpoints.sso.happyelements_endpoints import (
+                    from litellm.proxy.management_endpoints.sso.cli_sso_endpoints import (
                         _get_or_create_cli_virtual_key,
                     )
                     from litellm.proxy.proxy_server import prisma_client as _prisma_client
@@ -1401,8 +1452,8 @@ async def cli_poll_key(key_id: str, team_id: Optional[str] = None, usage: Option
                 }
 
             # Fast path: session already contains a resolved virtual key (sk-xxx).
-            # This happens when happyelements_callback handled the CLI flow and
-            # stored the key directly. Return it immediately without generating a JWT.
+            # This happens when cli_sso_callback pre-resolved the key.
+            # Return it immediately without generating a JWT.
             if session_data.get("key") and session_data.get("status") == "ready":
                 pre_resolved_key = session_data["key"]
                 pre_resolved_user_id = session_data.get("user_id", "")
