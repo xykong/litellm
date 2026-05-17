@@ -2253,6 +2253,42 @@ class OpenTelemetry(OTELGenAISemconvMixin, CustomLogger):
                     value=usage.get("prompt_tokens"),
                 )
 
+            #############################################
+            ############ Timing Attributes ##############
+            #############################################
+            # Record api_call_start_time and completion_start_time as span attributes
+            # so downstream consumers (ClickHouse MV, dashboards) can compute
+            # precise generation speed excluding TTFT.
+            api_call_start_time = kwargs.get("api_call_start_time", None)
+            completion_start_time = kwargs.get("completion_start_time", None)
+
+            if api_call_start_time is not None:
+                api_call_start_ts = self._to_timestamp(api_call_start_time)
+                if api_call_start_ts is not None:
+                    self.safe_set_attribute(
+                        span=span,
+                        key="gen_ai.timing.api_call_start",
+                        value=api_call_start_ts,
+                    )
+
+            if completion_start_time is not None:
+                completion_start_ts = self._to_timestamp(completion_start_time)
+                if completion_start_ts is not None:
+                    self.safe_set_attribute(
+                        span=span,
+                        key="gen_ai.timing.completion_start",
+                        value=completion_start_ts,
+                    )
+                    # Also record TTFT directly for convenience
+                    if api_call_start_time is not None:
+                        api_ts = self._to_timestamp(api_call_start_time)
+                        if api_ts is not None:
+                            self.safe_set_attribute(
+                                span=span,
+                                key="gen_ai.timing.ttft_seconds",
+                                value=completion_start_ts - api_ts,
+                            )
+
                 ########################################################################
             ########## LLM Request Medssages / tools / content Attributes ###########
             #########################################################################
