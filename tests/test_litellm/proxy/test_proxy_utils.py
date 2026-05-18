@@ -2,6 +2,7 @@ import datetime as real_datetime
 import json
 import os
 import sys
+from typing import TYPE_CHECKING, cast
 
 import pytest
 from fastapi import HTTPException
@@ -9,6 +10,11 @@ from fastapi import HTTPException
 from litellm.caching.caching import DualCache
 from litellm.proxy._types import ProxyErrorTypes
 from litellm.proxy.utils import ProxyLogging
+
+if TYPE_CHECKING:
+    from litellm import Router
+    from litellm.caching.caching import DualCache
+    from litellm.proxy.proxy_server import PrismaClient
 
 sys.path.insert(
     0, os.path.abspath("../../..")
@@ -18,6 +24,128 @@ sys.path.insert(
 from unittest.mock import MagicMock
 
 from litellm.proxy.utils import get_custom_url, join_paths
+
+
+@pytest.mark.asyncio
+async def test_get_available_models_for_user_includes_team_access_group_models_for_all_team_models_key(
+    monkeypatch,
+):
+    from types import SimpleNamespace
+
+    from litellm.proxy._types import SpecialModelNames, UserAPIKeyAuth
+    from litellm.proxy.utils import get_available_models_for_user
+
+    async def fake_get_team_object(**_kwargs):
+        return SimpleNamespace(
+            models=[SpecialModelNames.no_default_models.value],
+            access_group_ids=["group-1"],
+        )
+
+    async def fake_validate_membership(**_kwargs):
+        return None
+
+    async def fake_get_models_from_access_groups(access_group_ids, **_kwargs):
+        assert access_group_ids == ["group-1"]
+        return ["model-from-group"]
+
+    monkeypatch.setattr(
+        "litellm.proxy.auth.auth_checks.get_team_object",
+        fake_get_team_object,
+    )
+    monkeypatch.setattr(
+        "litellm.proxy.management_endpoints.team_endpoints.validate_membership",
+        fake_validate_membership,
+    )
+    monkeypatch.setattr(
+        "litellm.proxy.auth.auth_checks._get_models_from_access_groups",
+        fake_get_models_from_access_groups,
+    )
+
+    result = await get_available_models_for_user(
+        user_api_key_dict=UserAPIKeyAuth(
+            models=[SpecialModelNames.all_team_models.value],
+            team_id="team-1",
+            team_models=[SpecialModelNames.no_default_models.value],
+        ),
+        llm_router=None,
+        general_settings={},
+        user_model=None,
+        prisma_client=cast("PrismaClient", object()),
+        proxy_logging_obj=cast("ProxyLogging", object()),
+        user_api_key_cache=cast("DualCache", object()),
+    )
+
+    assert result == ["model-from-group"]
+
+
+@pytest.mark.asyncio
+async def test_get_available_models_for_user_returns_empty_when_only_no_default_models():
+    from litellm.proxy._types import SpecialModelNames, UserAPIKeyAuth
+    from litellm.proxy.utils import get_available_models_for_user
+
+    result = await get_available_models_for_user(
+        user_api_key_dict=UserAPIKeyAuth(
+            models=[SpecialModelNames.all_team_models.value],
+            team_id="team-1",
+            team_models=[SpecialModelNames.no_default_models.value],
+        ),
+        llm_router=None,
+        general_settings={},
+        user_model=None,
+    )
+
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_get_available_models_for_user_keeps_empty_team_models_as_proxy_defaults(
+    monkeypatch,
+):
+    from types import SimpleNamespace
+
+    from litellm.proxy._types import UserAPIKeyAuth
+    from litellm.proxy.utils import get_available_models_for_user
+
+    async def fake_get_team_object(**_kwargs):
+        return SimpleNamespace(models=[], access_group_ids=["group-1"])
+
+    async def fake_get_models_from_access_groups(access_group_ids, **_kwargs):
+        assert access_group_ids == ["group-1"]
+        return ["model-from-group"]
+
+    monkeypatch.setattr(
+        "litellm.proxy.auth.auth_checks.get_team_object",
+        fake_get_team_object,
+    )
+    monkeypatch.setattr(
+        "litellm.proxy.auth.auth_checks._get_models_from_access_groups",
+        fake_get_models_from_access_groups,
+    )
+
+    result = await get_available_models_for_user(
+        user_api_key_dict=UserAPIKeyAuth(
+            models=[],
+            team_id="team-1",
+            team_models=[],
+        ),
+        llm_router=cast(
+            "Router",
+            cast(
+                object,
+                SimpleNamespace(
+                    get_model_names=lambda: ["proxy-model"],
+                    get_model_access_groups=lambda: {},
+                ),
+            ),
+        ),
+        general_settings={},
+        user_model=None,
+        prisma_client=cast("PrismaClient", object()),
+        proxy_logging_obj=cast("ProxyLogging", object()),
+        user_api_key_cache=cast("DualCache", object()),
+    )
+
+    assert result == ["proxy-model"]
 
 
 def test_get_custom_url(monkeypatch):
