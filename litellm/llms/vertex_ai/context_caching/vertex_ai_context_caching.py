@@ -315,6 +315,13 @@ class ContextCachingEndpoints(VertexBase):
         if cached_content is not None:
             return messages, optional_params, cached_content
 
+        _OFFICIAL_ENDPOINTS = (
+            "generativelanguage.googleapis.com",
+            "aiplatform.googleapis.com",
+        )
+        if api_base is not None and not any(h in api_base for h in _OFFICIAL_ENDPOINTS):
+            return messages, optional_params, None
+
         cached_messages, non_cached_messages = separate_cached_messages(
             messages=messages
         )
@@ -464,6 +471,13 @@ class ContextCachingEndpoints(VertexBase):
         """
         if cached_content is not None:
             return messages, optional_params, cached_content
+
+        _OFFICIAL_ENDPOINTS = (
+            "generativelanguage.googleapis.com",
+            "aiplatform.googleapis.com",
+        )
+        if api_base is not None and not any(h in api_base for h in _OFFICIAL_ENDPOINTS):
+            return messages, optional_params, None
 
         cached_messages, non_cached_messages = separate_cached_messages(
             messages=messages
