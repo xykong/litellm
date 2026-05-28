@@ -6755,7 +6755,7 @@ class Router:
                 _healthy_deployments,
                 _all_deployments,
             ) = await self._async_get_healthy_deployments(
-                model=kwargs.get("model") or "",
+                model=model_group or kwargs.get("model") or "",
                 parent_otel_span=parent_otel_span,
             )
 
@@ -6841,7 +6841,7 @@ class Router:
                     ## LOGGING
                     kwargs = self.log_retry(kwargs=kwargs, e=e)
                     remaining_retries = num_retries - current_attempt - 1
-                    _model: Optional[str] = kwargs.get("model")  # type: ignore
+                    _model: Optional[str] = model_group or kwargs.get("model")  # type: ignore
                     if _model is not None:
                         (
                             _healthy_deployments,
