@@ -7,7 +7,7 @@ Covers:
   C) no prompt_id → hook is skipped, input is unchanged
   D) model override from the prompt template is applied
   E) prompt_template_optional_params flow into the request
-  F) non-message items in input are filtered out
+    F) non-message items in input are filtered before prompt hook and preserved downstream
   G) model override re-resolves provider
   H) async path calls async_get_chat_completion_prompt
   I) async path propagates optional params to downstream handler
@@ -224,10 +224,7 @@ class TestResponsesAPIPromptManagement:
         handler_call_kwargs = mock_handler.call_args.kwargs
         assert handler_call_kwargs.get("model") == "openai/gpt-4o-mini"
 
-    def test_non_message_input_items_filtered(self):
-        """[F] Non-message items in ResponseInputParam (e.g. function_call_output) are
-        filtered out before being passed to the prompt hook, avoiding malformed merges.
-        """
+    def test_non_message_input_items_filtered_before_hook_and_preserved_downstream(self):
         template_messages: List[AllMessageValues] = [
             {"role": "system", "content": "You are helpful."},  # type: ignore[list-item]
         ]
@@ -241,7 +238,7 @@ class TestResponsesAPIPromptManagement:
         )
 
         patches = _patch_responses_dispatch()
-        with patches[0], patches[1], patches[2], patches[3]:
+        with patches[0], patches[1], patches[2], patches[3] as mock_handler:
             import litellm
 
             litellm.responses(
@@ -255,6 +252,12 @@ class TestResponsesAPIPromptManagement:
         passed_messages = call_kwargs["messages"]
         assert all(isinstance(m, dict) and "role" in m for m in passed_messages)
         assert len(passed_messages) == 1
+        handler_call_kwargs = mock_handler.call_args.kwargs
+        assert handler_call_kwargs.get("input") == [
+            {"role": "system", "content": "You are helpful."},
+            {"role": "user", "content": "Hello"},
+            {"type": "function_call_output", "call_id": "abc", "output": "42"},
+        ]
 
     def test_model_override_re_resolves_provider(self):
         """[G] When the prompt template overrides the model to a different provider,
@@ -362,8 +365,7 @@ class TestAsyncResponsesAPIPromptManagement:
         assert request_params.get("temperature") == 0.7
 
     @pytest.mark.asyncio
-    async def test_async_non_message_items_filtered(self):
-        """[J] Non-message items are filtered in the async path too."""
+    async def test_async_non_message_items_filtered_before_hook_and_preserved_downstream(self):
         template_messages: List[AllMessageValues] = [
             {"role": "system", "content": "Be helpful."},  # type: ignore[list-item]
         ]
@@ -377,7 +379,7 @@ class TestAsyncResponsesAPIPromptManagement:
         )
 
         patches = _patch_responses_dispatch()
-        with patches[0], patches[1], patches[2], patches[3]:
+        with patches[0], patches[1], patches[2], patches[3] as mock_handler:
             import litellm
 
             await litellm.aresponses(
@@ -393,3 +395,9 @@ class TestAsyncResponsesAPIPromptManagement:
         passed_messages = call_kwargs["messages"]
         assert all(isinstance(m, dict) and "role" in m for m in passed_messages)
         assert len(passed_messages) == 1
+        handler_call_kwargs = mock_handler.call_args.kwargs
+        assert handler_call_kwargs.get("input") == [
+            {"role": "system", "content": "Be helpful."},
+            {"role": "user", "content": "Hello"},
+            {"type": "function_call_output", "call_id": "abc", "output": "42"},
+        ]

@@ -144,9 +144,12 @@ class AzureOpenAIGPT5Config(AzureOpenAIConfig, OpenAIGPT5Config):
         if result_effort == "none" and not supports_none:
             result.pop("reasoning_effort")
 
-        # Azure gpt-5.4+ with tools + reasoning_effort is now routed to the
-        # Responses API bridge (same as OpenAI), so we no longer need to drop
-        # reasoning_effort here.  See: responses_api_bridge_check() in main.py.
+        if self.is_model_gpt_5_4_plus_model(model):
+            has_tools = bool(
+                non_default_params.get("tools") or optional_params.get("tools")
+            )
+            if has_tools and result_effort not in (None, "none"):
+                result.pop("reasoning_effort", None)
 
         return result
 

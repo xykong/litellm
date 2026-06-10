@@ -198,14 +198,9 @@ def test_azure_gpt5_1_series_temperature_handling(config: AzureOpenAIGPT5Config)
     assert params["temperature"] == 0.6
 
 
-def test_azure_gpt5_4_preserves_reasoning_effort_when_tools_present(
+def test_azure_gpt5_4_drops_reasoning_effort_when_tools_present(
     config: AzureOpenAIGPT5Config,
 ):
-    """Azure GPT-5.4+ no longer drops reasoning_effort when tools are present.
-
-    Both OpenAI and Azure now route tools+reasoning to the Responses API bridge,
-    so reasoning_effort must be preserved in map_openai_params.
-    """
     tools = [{"type": "function", "function": {"name": "test", "description": "test"}}]
     params = config.map_openai_params(
         non_default_params={"reasoning_effort": "high", "tools": tools},
@@ -214,7 +209,7 @@ def test_azure_gpt5_4_preserves_reasoning_effort_when_tools_present(
         drop_params=False,
         api_version="2024-05-01-preview",
     )
-    assert params.get("reasoning_effort") == "high"
+    assert "reasoning_effort" not in params
     assert params["tools"] == tools
 
 

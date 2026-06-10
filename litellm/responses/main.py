@@ -494,11 +494,15 @@ async def aresponses(
                 client_input: List[AllMessageValues] = [
                     {"role": "user", "content": input}
                 ]
+                non_message_items: List[Any] = []
             else:
                 client_input = [
                     item  # type: ignore[misc]
                     for item in input
                     if isinstance(item, dict) and "role" in item
+                ]
+                non_message_items = [
+                    item for item in input if isinstance(item, dict) and "role" not in item
                 ]
             (
                 model,
@@ -513,6 +517,8 @@ async def aresponses(
                 prompt_label=kwargs.get("prompt_label", None),
                 prompt_version=kwargs.get("prompt_version", None),
             )
+            if non_message_items:
+                merged_input = list(merged_input) + non_message_items
             input = cast(Union[str, ResponseInputParam], merged_input)
             if model != original_model:
                 _, custom_llm_provider, _, _ = litellm.get_llm_provider(model=model)
@@ -607,11 +613,15 @@ def _apply_prompt_management_to_responses_call(
 
     if isinstance(input, str):
         client_input: List[AllMessageValues] = [{"role": "user", "content": input}]
+        non_message_items: List[Any] = []
     else:
         client_input = [
             item  # type: ignore[misc]
             for item in input
             if isinstance(item, dict) and "role" in item
+        ]
+        non_message_items = [
+            item for item in input if isinstance(item, dict) and "role" not in item
         ]
 
     if isinstance(
@@ -632,6 +642,8 @@ def _apply_prompt_management_to_responses_call(
             prompt_label=kwargs.get("prompt_label", None),
             prompt_version=kwargs.get("prompt_version", None),
         )
+        if non_message_items:
+            merged_input = list(merged_input) + non_message_items
         input = cast(Union[str, ResponseInputParam], merged_input)
         local_vars["input"] = input
         local_vars["model"] = model

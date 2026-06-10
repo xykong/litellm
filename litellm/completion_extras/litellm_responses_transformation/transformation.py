@@ -515,6 +515,8 @@ class LiteLLMResponsesTransformationHandler(CompletionTransformationBridge):
                 )
 
             elif isinstance(item, ResponseOutputMessage):
+                if getattr(item, "phase", None) == "commentary":
+                    continue
                 for content in item.content:
                     response_text = getattr(content, "text", "")
                     # Extract annotations from content if present
@@ -1176,6 +1178,7 @@ class OpenAiResponsesToChatCompletionStreamIterator(BaseModelResponseIterator):
         self, streaming_response, sync_stream: bool, json_mode: Optional[bool] = False
     ):
         super().__init__(streaming_response, sync_stream, json_mode)
+        self._commentary_output_index: Optional[int] = None
 
     def _handle_string_chunk(
         self, str_line: Union[str, "BaseModel"]
@@ -1507,6 +1510,41 @@ class OpenAiResponsesToChatCompletionStreamIterator(BaseModelResponseIterator):
         verbose_logger.debug(
             f"Chat provider: transform_streaming_response called with chunk: {chunk}"
         )
+        event_type = chunk.get("type", "")
+        if isinstance(event_type, ResponsesAPIStreamEvents):
+            event_type = event_type.value
+
+        if event_type == "response.output_item.added":
+            output_item = chunk.get("item", {})
+            if (
+                output_item.get("type") == "message"
+                and output_item.get("phase") == "commentary"
+            ):
+                self._commentary_output_index = chunk.get("output_index")
+        elif event_type == "response.output_item.done":
+            output_item = chunk.get("item", {})
+            if (
+                output_item.get("type") == "message"
+                and output_item.get("phase") == "commentary"
+            ):
+                self._commentary_output_index = None
+        elif event_type in ("response.output_text.delta", "response.output_text.done"):
+            if (
+                self._commentary_output_index is not None
+                and chunk.get("output_index") == self._commentary_output_index
+            ):
+                from litellm.types.utils import Delta, StreamingChoices
+
+                return ModelResponseStream(
+                    choices=[
+                        StreamingChoices(
+                            index=0,
+                            delta=Delta(content=""),
+                            finish_reason=None,
+                        )
+                    ]
+                )
+
         return OpenAiResponsesToChatCompletionStreamIterator.translate_responses_chunk_to_openai_stream(
             chunk
         )
